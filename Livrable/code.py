@@ -7,20 +7,11 @@ import time
 listeClient = [5, 8, 3, 6, 12]
 
 
-def voisinsSommetGrapheMatrice(matrice, sommet):
-
-    return [i for i, val in enumerate(matrice[sommet]) if val > 0]
-
-
-
-
-
-
-def degreSommetGrapheMatrice(matrice, sommet):
+def poidsArete(matrice, sommet1, sommet2):
     """
-    Calcule le degré d’un sommet (le nombre d’arêtes qui y sont connectées).
+    Retourne le poids de l’arête entre deux sommets.
     """
-    return sum(matrice[sommet])
+    return matrice[sommet1][sommet2]
 
 
 
@@ -44,10 +35,10 @@ def recherche_tabou_cycle(matrice, start, taille_tabou=5, iter_max=100):
     nb_sommets = len(matrice_copy)
 
     # Le cycle que nous construisons (liste d’indices de sommets)
-    cycle = [start]
+    cycle = start
 
     # Liste tabou : elle garde les derniers sommets visités pour éviter les retours
-    tabou = deque(maxlen=taille_tabou)
+    tabou = deque(taille_tabou) 
     tabou.append(start)
 
     # Le sommet courant (celui où on se trouve actuellement)
@@ -122,7 +113,7 @@ def tabou_multi_start(matrice, nb_lancements=10, taille_tabou=5, iter_max=100):
 
 
 
-matrix_zone_A = [
+matrice = [
  [0, 12, 5, 19, 1, 8, 16, 11, 6, 7, 13, 17, 10],
  [12, 0, 4, 3, 15, 18, 20, 8, 19, 11, 14, 5, 9],
  [5, 4, 0, 14, 17, 10, 2, 13, 7, 18, 8, 9, 16],
@@ -145,7 +136,7 @@ start_time = time.time()
 print("### Recherche tabou multi-start sur la Zone A ###\n")
 
 # Lancement du multi-start (10 essais, taille tabou = 5, 100 itérations max)
-meilleur_cycle = tabou_multi_start(matrix_zone_A, nb_lancements=10, taille_tabou=5, iter_max=100)
+meilleur_cycle = tabou_multi_start(matrice, nb_lancements=10, taille_tabou=5, iter_max=100)
 
 # Fin du chrono
 end_time = time.time()
@@ -160,3 +151,14 @@ print(meilleur_cycle[0] + 1)  # on revient au départ pour fermer le cycle
 
 print("\nTemps d'exécution :", round(execution_time_ms, 2), "ms")
 
+
+
+def traffic_jam(matrice, prob_bouchon=0.2, facteur=2):
+    for x in range(0, len(matrice)):
+        for y in range(0,len(matrice)):
+            if x != y:
+                if random.random() < prob_bouchon:
+                    matrice_copy[i][j] *= facteur
+    return matrice_copy
+
+matrice_avec_bouchons = traffic_jam(matrice, prob_bouchon=0.3, facteur=3)
