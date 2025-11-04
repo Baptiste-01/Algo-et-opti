@@ -1,0 +1,11 @@
+1 - Refaire le texte du livrable en complétant avec la méthode
+RO/ choix méthode
+Explication choix/ methode
+
+2 - Expliquer code 
+expliuqer les test 10 50 100 1000 2000 en 20 runs
+
+3 - expliuqer les resultats 
+Temps de realisation, les couts, plan d'esperance, limite, amelioration?
+
+Question prof : Date de rendu?
