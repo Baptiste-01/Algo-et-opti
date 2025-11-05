@@ -5,6 +5,7 @@ import time
 
 
 listeClient = [5, 8, 3, 6, 12]
+depot = 0
 
 
 def voisinMinPoid(matrice, listeClient, cur):
@@ -30,7 +31,15 @@ def voisinsClientGrapheMatrice(matrice, sommet):
     voisins = [i for i in enumerate(listeClient) if matrice[sommet][i] > 0]
     return voisins 
 
-
+def poidCycle(matrice, cycle):
+    """
+    Calcule le poids total d’un cycle donné
+    """
+    poids_total = 0
+    for i in range(len(cycle) - 1):
+        poids_total += matrice[cycle[i]][cycle[i + 1]]
+    poids_total += matrice[cycle[-1]][cycle[0]] 
+    return poids_total
 
 
 
@@ -47,9 +56,6 @@ def recherche_tabou_cycle(matrice, start, taille_tabou=5, iter_max=100):
 
     # On copie la matrice pour ne pas modifier l’originale
     matrice_copy = copy.deepcopy(matrice)
-
-    # Nombre total de sommets du graphe
-    nb_sommets = len(matrice_copy)
 
     # Le cycle que nous construisons (liste d’indices de sommets)
     cycle = start
@@ -79,14 +85,10 @@ def recherche_tabou_cycle(matrice, start, taille_tabou=5, iter_max=100):
         # On retire l’arête entre le sommet courant et le voisin choisi
         matrice_copy[cur][voisin] = 0
         matrice_copy[voisin][cur] = 0
+        
+        cycle.append(voisin) # On ajoute ce voisin au cycle    
+        tabou.append(cur) # On ajoute le sommet courant dans la liste tabou
 
-        # On ajoute ce voisin au cycle
-        cycle.append(voisin)
-
-        # On ajoute le sommet courant dans la liste tabou
-        tabou.append(cur)
-
-        # Le voisin devient le nouveau sommet courant
         cur = voisin
 
     # On retourne le chemin (cycle) trouvé
@@ -104,13 +106,13 @@ def tabou_multi_start(matrice, nb_lancements=10, taille_tabou=5, iter_max=100):
     - iter_max : nombre d’itérations par recherche
     """
 
-    meilleur_cycle = []  # Le meilleur cycle global (le plus long)
+    meilleur_cycle = []  # Le meilleur cycle global (le plus court)
+    tempsMeilleurCycle = 0
 
     # On répète l’expérience plusieurs fois (multi-start)
     for i in range(nb_lancements):
 
-        # On choisit un sommet de départ aléatoire
-        start = random.randint(0, len(matrice) - 1)
+        start = depot
 
         # On effectue une recherche tabou locale à partir de ce sommet
         cycle = recherche_tabou_cycle(matrice, start, taille_tabou, iter_max)
@@ -118,8 +120,10 @@ def tabou_multi_start(matrice, nb_lancements=10, taille_tabou=5, iter_max=100):
         # On affiche le résultat intermédiaire
         print(f"Lancement {i+1}: départ={start+1}, longueur du cycle={len(cycle)}")
 
-        # Si ce cycle est plus long que le meilleur trouvé jusqu’à présent, on le garde
-        if len(cycle) > len(meilleur_cycle):
+        
+        if tempsMeilleurCycle == 0:
+            tempsMeilleurCycle = poidCycle(matrice, cycle)
+        elif poidCycle(matrice, cycle) > tempsMeilleurCycle:
             meilleur_cycle = cycle
 
     # Après tous les lancements, on renvoie le meilleur
