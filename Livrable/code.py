@@ -27,32 +27,24 @@ matrice_copy = copy.deepcopy(matrice)
 
 
 def voisinMinPoid(matrice, listeClient, cur):
-    """
-    Retourne le voisin de poids minimum parmi les voisins du sommet 'cur'
-    """
-    poidTrajet = []
+    poidMinTrajet = 0
     nextVoisin = -1
     
     for i in listeClient:
-        if matrice[cur][i] > 0 and min(matrice[cur][i]) :
+        if matrice[cur][i] > 0 and poidMinTrajet == 0:
             nextVoisin = i
-            poidTrajet.append(matrice[cur][i])
-        elif matrice[cur][i] > 0:
-            poidTrajet.append(matrice[cur][i]) 
+            poidMinTrajet = matrice[cur][i]
+        elif matrice[cur][i] > 0 and matrice[cur][i] < poidMinTrajet:
+            poidMinTrajet = matrice[cur][i]
+            nextVoisin = i
 
     return nextVoisin
 
 def voisinsClientGrapheMatrice(matrice, sommet):
-    """
-    Retourne la liste des voisins d’un sommet dans le graphe
-    """
-    voisins = [i for i in enumerate(listeClient) if matrice[sommet][i] > 0]
+    voisins = [i for i in listeClient if matrice[sommet][i] > 0]
     return voisins 
 
 def poidCycle(matrice, cycle):
-    """
-    Calcule le poids total d’un cycle donné
-    """
     poids_total = 0
     for i in range(len(cycle) - 1):
         poids_total += matrice[cycle[i]][cycle[i + 1]]
@@ -61,22 +53,13 @@ def poidCycle(matrice, cycle):
 
 
 
-def recherche_tabou_cycle(matrice, start, iter_max=100):
-    """
-    Cherche un long chemin eulérien à partir d’un sommet initial 'start'
-    en utilisant une liste tabou pour éviter de revenir sur des sommets récents.
-
-    - matrice : matrice d’adjacence du graphe
-    - start : sommet de départ
-    - taille_tabou : nombre maximal de sommets récents à "interdire"
-    - iter_max : nombre maximal d’itérations (limite d’exploration)
-    """
+def recherche_tabou_cycle(matrice, start, firstNeighbor, iter_max=100):
 
     # On copie la matrice pour ne pas modifier l’originale
     matrice_copy = copy.deepcopy(matrice)
 
     # Le cycle que nous construisons (liste d’indices de sommets)
-    cycle = start
+    cycle = [start]
 
     # Liste tabou : elle garde les derniers sommets visités pour éviter les retours
     tailleTabou = len(listeClient) + 5
@@ -89,24 +72,25 @@ def recherche_tabou_cycle(matrice, start, iter_max=100):
     # Boucle principale de la recherche tabou
     for _ in range(iter_max):
 
-        # On récupère la liste des voisins encore connectés du sommet courant
-        voisins = voisinsClientGrapheMatrice(matrice_copy, cur)
+        if len(cycle) == 1:
+            voisin = firstNeighbor
+        else:
+            voisins = voisinsClientGrapheMatrice(matrice_copy, cur) # On récupère la liste des voisins encore connectés du sommet courant
+           
+            candidats = [i for i in voisins if i not in tabou] # On enlève les voisins qui sont "tabou" 
 
-        # On enlève les voisins qui sont "tabou" 
-        candidats = [i for i in voisins if i not in tabou]
+            # S’il n’y a aucun voisin disponible, on ne peut plus avancer
+            if not candidats:
+                break
 
-        # S’il n’y a aucun voisin disponible, on ne peut plus avancer
-        if not candidats:
-            break
-
-        voisin = voisinMinPoid(matrice_copy, listeClient, cur)
+            voisin = voisinMinPoid(matrice_copy, candidats, cur)
 
         # On retire l’arête entre le sommet courant et le voisin choisi
         matrice_copy[cur][voisin] = 0
         matrice_copy[voisin][cur] = 0
         
         cycle.append(voisin) # On ajoute ce voisin au cycle    
-        tabou.append(cur) # On ajoute le sommet courant dans la liste tabou
+        tabou.append(voisin) # On ajoute le sommet courant dans la liste tabou
 
         cur = voisin
 
@@ -126,23 +110,33 @@ def tabou_multi_start(matrice, nb_lancements=10, iter_max=100):
 
     meilleur_cycle = []  # Le meilleur cycle global (le plus court)
     tempsMeilleurCycle = 0
+    goodI = 0
 
     # On répète l’expérience plusieurs fois (multi-start)
     for i in range(nb_lancements):
 
         start = depot
 
+        firstNeighbor = 0
+
+        while matrice[start][firstNeighbor] == 0:
+            firstNeighbor = random.randint(0, len(listeClient)-1)
+
         # On effectue une recherche tabou locale à partir de ce sommet
-        cycle = recherche_tabou_cycle(matrice, start, iter_max)
+        cycle = recherche_tabou_cycle(matrice, start, firstNeighbor, iter_max)
 
         # On affiche le résultat intermédiaire
-        print(f"Lancement {i+1}: départ={start+1}, longueur du cycle={len(cycle)}")
+        print(f"Lancement {i+1}: départ={firstNeighbor}, longueur du cycle={len(cycle)}, temps du trajet={poidCycle(matrice, cycle)}")
 
         
         if tempsMeilleurCycle == 0:
             tempsMeilleurCycle = poidCycle(matrice, cycle)
-        elif poidCycle(matrice, cycle) > tempsMeilleurCycle:
             meilleur_cycle = cycle
+            goodI = i+1
+        elif poidCycle(matrice, cycle) < tempsMeilleurCycle:
+            meilleur_cycle = cycle
+            tempsMeilleurCycle = poidCycle(matrice, cycle)
+            goodI = i+1
 
     # Après tous les lancements, on renvoie le meilleur
     return meilleur_cycle
@@ -155,7 +149,7 @@ start_time = time.time()
 print("### Recherche tabou multi-start sur la Zone A ###\n")
 
 # Lancement du multi-start (10 essais, taille tabou = 5, 100 itérations max)
-meilleur_cycle = tabou_multi_start(matrice, nb_lancements=10, iter_max=100)
+meilleur_cycle, tempsMeilleurCycle, goodI = tabou_multi_start(matrice, nb_lancements=10, iter_max=100)
 
 # Fin du chrono
 end_time = time.time()
@@ -163,10 +157,10 @@ execution_time_ms = (end_time - start_time) * 1000
 
 # Affichage du meilleur résultat trouvé
 print("\n=== Meilleur cycle trouvé ===")
-print("Longueur du cycle :", len(meilleur_cycle))
+print("Lancement n°", goodI, "Longueur du cycle :", len(meilleur_cycle), "  Temps du cycle :", tempsMeilleurCycle)
 for s in meilleur_cycle:
     print(s + 1, "-> ", end='')
-print(meilleur_cycle[0] + 1)  # on revient au départ pour fermer le cycle
+print(meilleur_cycle[0]+1)  # on revient au départ pour fermer le cycle
 
 print("\nTemps d'exécution :", round(execution_time_ms, 2), "ms")
 
