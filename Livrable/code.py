@@ -7,11 +7,28 @@ import time
 listeClient = [5, 8, 3, 6, 12]
 
 
-def poidsArete(matrice, sommet1, sommet2):
+def voisinMinPoid(matrice, listeClient, cur):
     """
-    Retourne le poids de l’arête entre deux sommets.
+    Retourne le voisin de poids minimum parmi les voisins du sommet 'cur'
     """
-    return matrice[sommet1][sommet2]
+    poidTrajet = []
+    nextVoisin = -1
+    
+    for i in listeClient:
+        if matrice[cur][i] > 0 and min(matrice[cur][i]) :
+            nextVoisin = i
+            poidTrajet.append(matrice[cur][i])
+        elif matrice[cur][i] > 0:
+            poidTrajet.append(matrice[cur][i]) 
+
+    return nextVoisin
+
+def voisinsClientGrapheMatrice(matrice, sommet):
+    """
+    Retourne la liste des voisins d’un sommet dans le graphe
+    """
+    voisins = [i for i in enumerate(listeClient) if matrice[sommet][i] > 0]
+    return voisins 
 
 
 
@@ -48,23 +65,20 @@ def recherche_tabou_cycle(matrice, start, taille_tabou=5, iter_max=100):
     for _ in range(iter_max):
 
         # On récupère la liste des voisins encore connectés du sommet courant
-        voisins = voisinsSommetGrapheMatrice(matrice_copy, cur)
+        voisins = voisinsClientGrapheMatrice(matrice_copy, cur)
 
-        # On enlève les voisins qui sont "tabou" (récemment visités)
-        candidats = [v for v in voisins if v not in tabou]
+        # On enlève les voisins qui sont "tabou" 
+        candidats = [i for i in voisins if i not in tabou]
 
         # S’il n’y a aucun voisin disponible, on ne peut plus avancer
         if not candidats:
             break
 
-        # Choix du voisin :
-        # ici, on prend celui qui a le plus de connexions encore disponibles
-        # (c’est une heuristique pour prolonger le chemin)
-        voisin = max(candidats, key=lambda v: degreSommetGrapheMatrice(matrice_copy, v))
+        voisin = voisinMinPoid(matrice_copy, listeClient, cur)
 
-        # On "utilise" l’arête cur ↔ voisin (on la retire de la matrice)
-        matrice_copy[cur][voisin] -= 1
-        matrice_copy[voisin][cur] -= 1
+        # On retire l’arête entre le sommet courant et le voisin choisi
+        matrice_copy[cur][voisin] = 0
+        matrice_copy[voisin][cur] = 0
 
         # On ajoute ce voisin au cycle
         cycle.append(voisin)
