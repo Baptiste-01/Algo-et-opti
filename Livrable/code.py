@@ -43,7 +43,7 @@ def poidCycle(matrice, cycle):
 
 
 
-def recherche_tabou_cycle(matrice, start, taille_tabou=5, iter_max=100):
+def recherche_tabou_cycle(matrice, start, iter_max=100):
     """
     Cherche un long chemin eulérien à partir d’un sommet initial 'start'
     en utilisant une liste tabou pour éviter de revenir sur des sommets récents.
@@ -61,7 +61,8 @@ def recherche_tabou_cycle(matrice, start, taille_tabou=5, iter_max=100):
     cycle = start
 
     # Liste tabou : elle garde les derniers sommets visités pour éviter les retours
-    tabou = deque(taille_tabou) 
+    tailleTabou = len(listeClient) + 5
+    tabou = deque(maxlen= tailleTabou)
     tabou.append(start)
 
     # Le sommet courant (celui où on se trouve actuellement)
@@ -96,13 +97,12 @@ def recherche_tabou_cycle(matrice, start, taille_tabou=5, iter_max=100):
 
 
 
-def tabou_multi_start(matrice, nb_lancements=10, taille_tabou=5, iter_max=100):
+def tabou_multi_start(matrice, nb_lancements=10, iter_max=100):
     """
     Lance plusieurs recherches tabou depuis des sommets de départ aléatoires,
     puis retourne le meilleur cycle (le plus long) trouvé.
 
     - nb_lancements : nombre d’essais (points de départ différents)
-    - taille_tabou : taille de la liste tabou dans chaque recherche
     - iter_max : nombre d’itérations par recherche
     """
 
@@ -115,7 +115,7 @@ def tabou_multi_start(matrice, nb_lancements=10, taille_tabou=5, iter_max=100):
         start = depot
 
         # On effectue une recherche tabou locale à partir de ce sommet
-        cycle = recherche_tabou_cycle(matrice, start, taille_tabou, iter_max)
+        cycle = recherche_tabou_cycle(matrice, start, iter_max)
 
         # On affiche le résultat intermédiaire
         print(f"Lancement {i+1}: départ={start+1}, longueur du cycle={len(cycle)}")
@@ -154,7 +154,7 @@ start_time = time.time()
 print("### Recherche tabou multi-start sur la Zone A ###\n")
 
 # Lancement du multi-start (10 essais, taille tabou = 5, 100 itérations max)
-meilleur_cycle = tabou_multi_start(matrice, nb_lancements=10, taille_tabou=5, iter_max=100)
+meilleur_cycle = tabou_multi_start(matrice, nb_lancements=10, iter_max=100)
 
 # Fin du chrono
 end_time = time.time()
