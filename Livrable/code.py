@@ -7,6 +7,24 @@ import time
 listeClient = [5, 8, 3, 6, 12]
 depot = 0
 
+matrice = [
+ [0, 12, 5, 19, 1, 8, 16, 11, 6, 7, 13, 17, 10],
+ [12, 0, 4, 3, 15, 18, 20, 8, 19, 11, 14, 5, 9],
+ [5, 4, 0, 14, 17, 10, 2, 13, 7, 18, 8, 9, 16],
+ [19, 3, 14, 0, 12, 6, 9, 20, 15, 2, 10, 11, 7],
+ [1, 15, 17, 12, 0, 13, 11, 3, 8, 4, 16, 14, 5],
+ [8, 18, 10, 6, 13, 0, 5, 9, 20, 16, 3, 15, 19],
+ [16, 20, 2, 9, 11, 5, 0, 7, 14, 19, 18, 12, 4],
+ [11, 8, 13, 20, 3, 9, 7, 0, 10, 17, 2, 5, 15],
+ [6, 19, 7, 15, 8, 20, 14, 10, 0, 12, 9, 16, 18],
+ [7, 11, 18, 2, 4, 16, 19, 17, 12, 0, 15, 8, 6],
+ [13, 14, 8, 10, 16, 3, 18, 2, 9, 15, 0, 19, 20],
+ [17, 5, 9, 11, 14, 15, 12, 5, 16, 8, 19, 0, 13],
+ [10, 9, 16, 7, 5, 19, 4, 15, 18, 6, 20, 13, 0]
+]
+
+matrice_copy = copy.deepcopy(matrice)
+
 
 def voisinMinPoid(matrice, listeClient, cur):
     """
@@ -131,23 +149,6 @@ def tabou_multi_start(matrice, nb_lancements=10, iter_max=100):
 
 
 
-matrice = [
- [0, 12, 5, 19, 1, 8, 16, 11, 6, 7, 13, 17, 10],
- [12, 0, 4, 3, 15, 18, 20, 8, 19, 11, 14, 5, 9],
- [5, 4, 0, 14, 17, 10, 2, 13, 7, 18, 8, 9, 16],
- [19, 3, 14, 0, 12, 6, 9, 20, 15, 2, 10, 11, 7],
- [1, 15, 17, 12, 0, 13, 11, 3, 8, 4, 16, 14, 5],
- [8, 18, 10, 6, 13, 0, 5, 9, 20, 16, 3, 15, 19],
- [16, 20, 2, 9, 11, 5, 0, 7, 14, 19, 18, 12, 4],
- [11, 8, 13, 20, 3, 9, 7, 0, 10, 17, 2, 5, 15],
- [6, 19, 7, 15, 8, 20, 14, 10, 0, 12, 9, 16, 18],
- [7, 11, 18, 2, 4, 16, 19, 17, 12, 0, 15, 8, 6],
- [13, 14, 8, 10, 16, 3, 18, 2, 9, 15, 0, 19, 20],
- [17, 5, 9, 11, 14, 15, 12, 5, 16, 8, 19, 0, 13],
- [10, 9, 16, 7, 5, 19, 4, 15, 18, 6, 20, 13, 0]
-]
-
-
 # Mesure du temps d’exécution
 start_time = time.time()
 
@@ -170,8 +171,11 @@ print(meilleur_cycle[0] + 1)  # on revient au départ pour fermer le cycle
 print("\nTemps d'exécution :", round(execution_time_ms, 2), "ms")
 
 
+prob_bouchon = 0.3
+facteur = 3
+def traffic_jam(matrice, prob_bouchon, facteur):
+    matrice_copy = copy.deepcopy(matrice)
 
-def traffic_jam(matrice, prob_bouchon=0.2, facteur=2):
     for x in range(0, len(matrice)):
         for y in range(0,len(matrice)):
             if x != y:
@@ -179,4 +183,4 @@ def traffic_jam(matrice, prob_bouchon=0.2, facteur=2):
                     matrice_copy[i][j] *= facteur
     return matrice_copy
 
-matrice_avec_bouchons = traffic_jam(matrice, prob_bouchon=0.3, facteur=3)
+matrice_avec_bouchons = traffic_jam(matrice, prob_bouchon, facteur)
