@@ -178,3 +178,7 @@ def traffic_jam(matrice, prob_bouchon, facteur):
     return matrice_copy
 
 matrice_avec_bouchons = traffic_jam(matrice, prob_bouchon, facteur)
+
+
+
+
