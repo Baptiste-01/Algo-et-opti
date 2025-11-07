@@ -4,11 +4,13 @@ from collections import deque
 import copy
 import random
 import time
+import math
 
 # Lecture de la matrice
-matrix = pd.read_csv("instance/6x6.csv", header=None).to_numpy()
+matrix = np.loadtxt("instance/2001x2001.csv", delimiter=",", dtype=int)
 
 depot = 0
+nbTrucks = 50
 
 def voisinMinPoid(matrix, listeClient, cur):
     poidMinTrajet = 0
@@ -26,13 +28,14 @@ def poidCycle():
     return sum(truckCycles[0])
 
 def recherche_tabou_cycle(matrix, start):
-    matrix_copy = copy.deepcopy(matrix+1)
+    # On copie la matrice pour ne pas modifier l'originale
+    matrix_copy = copy.deepcopy(matrix)
     tabou = deque(maxlen=len(matrix))
     tabou.append(start)
     
+    # Initialiser les cycles des camions
     for i in range(nbTrucks):
         tabou.append(truckCycles[1][i][-1])
-        
 
     while len(tabou) < len(matrix):
         # Choisir le camion avec le temps minimal
@@ -47,7 +50,7 @@ def recherche_tabou_cycle(matrix, start):
 
         voisin, temps = voisinMinPoid(matrix_copy, candidats, cur)
 
-        # Retirer l'arête
+        # Retirer l'arête entre cur et voisin
         matrix_copy[cur][voisin] = 0
         matrix_copy[voisin][cur] = 0
 
@@ -55,6 +58,15 @@ def recherche_tabou_cycle(matrix, start):
         truckCycles[1][truckAtMove].append(voisin)
         truckCycles[0][truckAtMove] += temps
         tabou.append(voisin)
+
+    # Ajouter le retour au dépôt
+    for i in range(nbTrucks):
+        # Retourner au dépôt
+        last_visited = truckCycles[1][i][-1]
+        truckCycles[1][i].append(depot)
+        truckCycles[0][i] += matrix[last_visited][depot]  # ajouter le coût du retour au dépôt
+
+
 
 def tabou_multi_start(matrix, nb_lancements=20):
     tempsMeilleurCycle = float('inf')
@@ -205,7 +217,7 @@ def simulation_journee(matrice, nom_fichier):
 import random
 
 def creer_fichiers_avec_bouchons():
-    matrix_instances = ['11x11.csv']
+    matrix_instances = ['2001x2001.csv']
     heures = [8, 12, 20]
 
     for instance in matrix_instances:
@@ -259,21 +271,21 @@ def creer_fichiers_avec_bouchons():
 
             print(f"✓ Fichier créé : {nom_sortie}")
 
-# c pour tester que tout fonctionne correctement avec la matrice 11x11
+# c pour tester que tout fonctionne correctement avec la matrice 2001x2001
 def test_bouchons():
     """
-    Test uniquement le système de bouchons avec la matrice 11x11
+    Test uniquement le système de bouchons avec la matrice 2001x2001
     """
 
     # 1. Lire la matrice originale
-    print("1. Lecture de la matrice 11x11...")
-    print(lire_matrice_csv("instance/11x11.csv"))
-    matrice_originale = lire_matrice_csv("instance/11x11.csv")
-    print(f"   ✅ Matrice originale : {len(matrice_originale)}x{len(matrice_originale)}")
+    #print("1. Lecture de la matrice 2001x2001...")
+    #print(lire_matrice_csv("instance/2001x2001.csv"))
+    matrice_originale = lire_matrice_csv("instance/2001x2001.csv")
+    # print(f"   ✅ Matrice originale : {len(matrice_originale)}x{len(matrice_originale)}")
     
     # 2. Tester la simulation sur 24h
     print("\n2. Simulation sur 24h...")
-    simulation_journee(matrice_originale, "11x11.csv")
+    simulation_journee(matrice_originale, "2001x2001.csv")
     
     # 3. Créer les 3 fichiers avec bouchons (UNIQUEMENT CET APPEL)
     print("\n3. Création des fichiers avec bouchons...")
@@ -290,7 +302,7 @@ def verifier_modifications():
     print("🔍 VÉRIFICATION DES MODIFICATIONS")
     print("=" * 50)
     random.seed(42)
-    matrice_test = lire_matrice_csv("instance/11x11.csv")
+    matrice_test = lire_matrice_csv("instance/2001x2001.csv")
     n = len(matrice_test)
     
     # Compter les routes non-nulles originales
