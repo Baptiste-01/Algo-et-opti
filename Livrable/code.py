@@ -177,10 +177,37 @@ def generer_facteur_bouchon(heure):
     intensite = 0.5 + 0.5 * math.sin((heure - 8) / 24 * 2 * math.pi)
     # Variation entre 1.0 et 3.0 environ
     n = random.uniform(-2,2)
+    print(n)
     facteur = n + 2.0 * intensite  
     if facteur <= 0:
         facteur = 1
     return facteur
+
+
+def facteurs_variation(matrice, pourcentage=0.3):
+    """
+    Ajoute des valeurs aléatoire à un pourcentage de routes dans la matrice,
+    """
+    n = len(matrice)
+    total_routes = n * (n - 1) // 2  # Nombre total de paires (i,j) avec i < j
+    
+    # Calculer combien de routes modifier
+    nb_a_modifier = int(total_routes * pourcentage)
+    
+    print(f"🎯 Modification de {nb_a_modifier} routes sur {total_routes} totales")
+    
+    # Modifier les routes aléatoirement
+    for _ in range(nb_a_modifier):
+        # Choisir une paire aléatoire
+        i = random.randint(0, n - 2)
+        j = random.randint(i + 1, n - 1)
+        
+        # Vérifier que la route existe
+        if matrice[i][j] != 0:
+            p = random.uniform(-0.5, 0.5)
+            nouvelle_valeur = matrice[i][j] * (1 + p)
+            matrice[i][j] = int(round(nouvelle_valeur, 0))
+            matrice[j][i] = int(round(nouvelle_valeur, 0))
 
 def cout_effectif(matrice, i, j, heure):
     """
@@ -192,16 +219,11 @@ def cout_effectif(matrice, i, j, heure):
         return 0
     
     # Facteur global du trafic (selon l'heure)
-    facteur_temps = generer_facteur_bouchon(heure)
-    
-    # Variation pseudo-aléatoire stable et symétrique
-    # Utiliser min/max pour garantir la même seed pour (i,j) et (j,i)
-    seed_value = hash(f"{min(i,j)}_{max(i,j)}_{heure}") % (2**32)
-    random.seed(seed_value)
+    facteur_bouchon = generer_facteur_bouchon(heure)
     variation = random.uniform(-0.1, 0.1)  # entre -10% et +10%
     
-    cout = base * facteur_temps * (1 + variation)
-    return round(cout, 0)
+    cout = base * facteur_bouchon * (1 + variation)
+    return max(1, int(round(cout, 0)))  # ✅ Éviter les 0
 
 
 def simulation_journee(matrice, nom_fichier):
@@ -220,26 +242,20 @@ def creer_fichiers_avec_bouchons():
     """
     Crée 3 fichiers CSV avec bouchons appliqués pour différentes heures
     """
-    #  NE  PAS Tester  AVEC 20 MATRICES D'UN COUP !
-    matrix_instances = ['matrix_distances_6x6.csv', 'matrix_distances_11x11.csv', 'matrix_distances_51x51.csv']  # 3 max pour tester
+    matrix_instances = ['matrix_distances_6x6.csv']
+    heures = [8, 12, 20]
     
-    heures = [8, 12, 17]  # Matin, midi, soir
-    
-    for instance in matrix_instances:  #  Enlever [:1] pour tester les 3
+    for instance in matrix_instances:  
         print(f"\n{'='*50}")
         print(f"Traitement de {instance}")
         print(f"{'='*50}")
         
         # Lire la matrice originale
-        chemin_original = f"livrable/instance/{instance}"
+        chemin_original = f"instance/{instance}" 
         try:
             matrice_base = lire_matrice_csv(chemin_original)
             n = len(matrice_base)
             print(f"Matrice chargée : {n}x{n}")
-            
-            #  AFFICHER PROGRESSION pour grandes matrices
-            if n > 100:
-                print("Traitement en cours... (cela peut prendre du temps)")
             
         except FileNotFoundError:
             print(f"Fichier {chemin_original} non trouvé")
@@ -247,82 +263,25 @@ def creer_fichiers_avec_bouchons():
         
         # Créer un fichier pour chaque heure
         for heure in heures:
-            nom_sortie = f"matrice/matrice_bouchons_{instance.replace('.csv', '')}_{heure}h.csv"
-            
+            nom_sortie = f"matrice/{instance.replace('.csv', '')}_{heure}h.csv"
             print(f"Création de {nom_sortie}...")
             
-            nouvelle_matrice = [[0] * n for _ in range(n)]
-            
-            # Appliquer les bouchons en préservant la symétrie
-            for i in range(n):
-                # Afficher progression pour grandes matrices
-                if n > 100 and i % 100 == 0:
-                    print(f"  Ligne {i}/{n}...")
-                    
-                for j in range(i, n):  # Ne traiter que la moitié supérieure
-                    if i == j:
-                        nouvelle_matrice[i][j] = 0
-                    else:
-                        cout = cout_effectif(matrice_base, i, j, heure)
-                        nouvelle_matrice[i][j] = cout
-                        nouvelle_matrice[j][i] = cout  # Symétrie
-            
-            # Écrire le nouveau fichier
-            with open(nom_sortie, 'w', newline='') as f:
-                writer = csv.writer(f)
-                for ligne in nouvelle_matrice:
-                    writer.writerow(ligne)
-            
-            print(f"✓ Fichier créé : {nom_sortie}")
 
+            matrice_copie = copy.deepcopy(matrice_base)
+            
 
-# c pour tester que tout fonctionne correctement avec la matrice 6x6
-def test_bouchons():
-    """
-    Test uniquement le système de bouchons avec la matrice 6x6
-    """
-    print("🚗 TEST BOUCHONS SEULEMENT")
-    print("=" * 50)
-    
-    # 1. Lire la matrice originale - CORRECTION DU CHEMIN
-    print("1. Lecture de la matrice 6x6...")
-    matrice_originale = lire_matrice_csv("instance/matrix_distances_6x6.csv")
-    print(f"   ✅ Matrice originale : {len(matrice_originale)}x{len(matrice_originale)}")
-    
-    # 2. Tester la simulation sur 24h
-    print("\n2. Simulation sur 24h...")
-    simulation_journee(matrice_originale, "matrix_distances_6x6.csv")
-    
-    # 3. Créer les 3 fichiers avec bouchons
-    print("\n3. Création des fichiers avec bouchons...")
-    
-    # Utiliser seulement la matrice 6x6 pour le test
-    matrix_instances_test = ['matrix_distances_6x6.csv']
-    heures = [8, 12, 17]
-    
-    for instance in matrix_instances_test:
-        print(f"\n   Traitement de {instance}...")
-        
-        # Lire la matrice originale - CORRECTION DU CHEMIN
-        chemin_original = f"instance/{instance}"  # ✅ Chemin corrigé
-        matrice_base = lire_matrice_csv(chemin_original)
-        n = len(matrice_base)
-        print(f"   ✅ Matrice chargée : {n}x{n}")
-        
-        # Créer un fichier pour chaque heure
-        for heure in heures:
-            nom_sortie = f"matrice/matrice_bouchons_{instance.replace('.csv', '')}_{heure}h.csv"
-            print(f"   📝 Création de {nom_sortie}...")
+            print("   Application des variations aléatoires...")
+            facteurs_variation(matrice_copie, 0.2)
             
             nouvelle_matrice = [[0] * n for _ in range(n)]
             
-            # Appliquer les bouchons
             for i in range(n):
                 for j in range(i, n):
                     if i == j:
                         nouvelle_matrice[i][j] = 0
                     else:
-                        cout = cout_effectif(matrice_base, i, j, heure)
+                        # ✅ Utiliser la matrice modifiée avec variations
+                        cout = cout_effectif(matrice_copie, i, j, heure)
                         nouvelle_matrice[i][j] = cout
                         nouvelle_matrice[j][i] = cout
             
@@ -332,14 +291,29 @@ def test_bouchons():
                 for ligne in nouvelle_matrice:
                     writer.writerow(ligne)
             
-            print(f"   ✅ Fichier créé : {nom_sortie}")
+            print(f"✓ Fichier créé : {nom_sortie}")
+
+# c pour tester que tout fonctionne correctement avec la matrice 6x6
+def test_bouchons():
+    """
+    Test uniquement le système de bouchons avec la matrice 6x6
+    """
+    # 1. Lire la matrice originale
+    print("1. Lecture de la matrice 6x6...")
+    matrice_originale = lire_matrice_csv("instance/matrix_distances_6x6.csv")
+    print(f"   ✅ Matrice originale : {len(matrice_originale)}x{len(matrice_originale)}")
+    
+    # 2. Tester la simulation sur 24h
+    print("\n2. Simulation sur 24h...")
+    simulation_journee(matrice_originale, "matrix_distances_6x6.csv")
+    
+    # 3. Créer les 3 fichiers avec bouchons (UNIQUEMENT CET APPEL)
+    print("\n3. Création des fichiers avec bouchons...")
+    creer_fichiers_avec_bouchons()  # ✅ Juste cet appel
     
     print("\n" + "=" * 50)
     print("🎉 TEST BOUCHONS TERMINÉ !")
-    print("3 fichiers créés dans le dossier 'matrice/' :")
-    print("  - matrice_bouchons_matrix_distances_6x6_8h.csv")
-    print("  - matrice_bouchons_matrix_distances_6x6_12h.csv") 
-    print("  - matrice_bouchons_matrix_distances_6x6_17h.csv")
+    print("3 fichiers créés dans le dossier 'matrice/'")
     print("=" * 50)
 
 test_bouchons()
