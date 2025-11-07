@@ -1,147 +1,129 @@
 import numpy as np
 from collections import deque
 import copy
-import math
 import random
 import time
+import pandas as pd
 
+# Lecture de la matrice
+matrix = pd.read_csv("instance/6x6.csv", header=None).to_numpy()
 
 depot = 0
+nbTrucks = 2
+
+# truckCycles[0] = temps de chaque camion
+# truckCycles[1] = cycle de chaque camion
+truckCycles = [
+    [0] * nbTrucks,
+    [[] for _ in range(nbTrucks)]
+]
 
 def voisinMinPoid(matrix, listeClient, cur):
     poidMinTrajet = 0
     nextVoisin = -1
-    
     for i in listeClient:
-        if matrix[cur][i] > 0 and poidMinTrajet == 0:
+        if matrix[cur][i] > 0 and (poidMinTrajet == 0 or matrix[cur][i] < poidMinTrajet):
             nextVoisin = i
             poidMinTrajet = matrix[cur][i]
-        elif matrix[cur][i] > 0 and matrix[cur][i] < poidMinTrajet:
-            poidMinTrajet = matrix[cur][i]
-            nextVoisin = i
-
-    return nextVoisin
+    return nextVoisin, poidMinTrajet
 
 def voisinsClientGraphematrix(matrix, sommet):
-    voisins = [i for i in range(len(matrix)) if matrix[sommet][i] > 0]
-    return voisins 
+    return [i for i in range(len(matrix)) if matrix[sommet][i] > 0]
 
-def poidCycle(matrix, cycle):
-    poids_total = 0
-    for i in range(len(cycle) - 1):
-        poids_total += matrix[cycle[i]][cycle[i + 1]]
-    poids_total += matrix[cycle[-1]][cycle[0]] 
-    return poids_total
+def poidCycle():
+    return sum(truckCycles[0])
 
-
-
-def recherche_tabou_cycle(matrix, start, firstNeighbor, iter_max=100):
-
-    # On copie la matrix pour ne pas modifier l’originale
-    matrix_copy = copy.deepcopy(matrix)
-
-    # Le cycle que nous construisons (liste d’indices de sommets)
-    cycle = [start]
-
-    # Liste tabou : elle garde les derniers sommets visités pour éviter les retours
-    tailleTabou = len(matrix) + 5
-    tabou = deque(maxlen= tailleTabou)
+def recherche_tabou_cycle(matrix, start):
+    matrix_copy = copy.deepcopy(matrix+1)
+    tabou = deque(maxlen=len(matrix))
     tabou.append(start)
+    
+    for i in range(nbTrucks):
+        tabou.append(truckCycles[1][i][-1])
+        
 
-    # Le sommet courant (celui où on se trouve actuellement)
-    cur = start
+    while len(tabou) < len(matrix):
+        # Choisir le camion avec le temps minimal
+        truckAtMove = truckCycles[0].index(min(truckCycles[0]))
+        cur = truckCycles[1][truckAtMove][-1]
 
-    # Boucle principale de la recherche tabou
-    for _ in range(iter_max):
+        voisins = voisinsClientGraphematrix(matrix_copy, cur)
+        candidats = [v for v in voisins if v not in tabou]
 
-        if len(cycle) == 1:
-            voisin = firstNeighbor
-        else:
-            voisins = voisinsClientGraphematrix(matrix_copy, cur) # On récupère la liste des voisins encore connectés du sommet courant
-           
-            candidats = [i for i in voisins if i not in tabou] # On enlève les voisins qui sont "tabou" 
+        if not candidats:
+            break
 
-            # S’il n’y a aucun voisin disponible, on ne peut plus avancer
-            if not candidats:
-                break
+        voisin, temps = voisinMinPoid(matrix_copy, candidats, cur)
 
-            voisin = voisinMinPoid(matrix_copy, candidats, cur)
-
-        # On retire l’arête entre le sommet courant et le voisin choisi
+        # Retirer l'arête
         matrix_copy[cur][voisin] = 0
         matrix_copy[voisin][cur] = 0
-        
-        cycle.append(voisin) # On ajoute ce voisin au cycle    
-        tabou.append(voisin) # On ajoute le sommet courant dans la liste tabou
 
-        cur = voisin
+        # Mettre à jour le cycle et le temps
+        truckCycles[1][truckAtMove].append(voisin)
+        truckCycles[0][truckAtMove] += temps
+        tabou.append(voisin)
 
-    # On retourne le chemin (cycle) trouvé
-    return cycle
+def tabou_multi_start(matrix, nb_lancements=20):
+    tempsMeilleurCycle = float('inf')
+    goodI = -1
+    bestTime = None  # ici on stockera seulement le meilleur
 
-
-
-def tabou_multi_start(matrix, nb_lancements=10, iter_max=100):
-    """
-    Lance plusieurs recherches tabou depuis des sommets de départ aléatoires,
-    puis retourne le meilleur cycle (le plus long) trouvé.
-
-    - nb_lancements : nombre d’essais (points de départ différents)
-    - iter_max : nombre d’itérations par recherche
-    """
-
-    meilleur_cycle = []  # Le meilleur cycle global (le plus court)
-    tempsMeilleurCycle = 0
-    goodI = 0
-
-    # On répète l’expérience plusieurs fois (multi-start)
     for i in range(nb_lancements):
+        global truckCycles
+        truckCycles = [
+            [0] * nbTrucks,
+            [[] for _ in range(nbTrucks)]
+        ]
 
-        start = depot
+        # Choix aléatoire du premier client pour chaque camion
+        for j in range(nbTrucks):
+            truckCycles[1][j] = [depot]
+            while True:
+                firstNeighbor = random.randint(1, len(matrix)-1)
+                if not any(firstNeighbor in cycle for cycle in truckCycles[1]):
+                    truckCycles[1][j].append(firstNeighbor)
+                    truckCycles[0][j] = matrix[depot][firstNeighbor]
+                    break
 
-        firstNeighbor = 0
+        recherche_tabou_cycle(matrix, depot)
 
-        while matrix[start][firstNeighbor] == 0:
-            firstNeighbor = random.randint(1, len(matrix)-1)
+        total = poidCycle()
+        print(f"Lancement {i+1} terminé : Temps du cycle = {total}")
+        for k in range(nbTrucks):
+            print(f"Premier client du camion {k+1} : {truckCycles[1][k][0]+1}")
+            print(f"Cycle du camion {k+1} : ", " -> ".join(str(x+1) for x in truckCycles[1][k]))
+            print(f"Temps total du camion {k+1} : {truckCycles[0][k]}")
+            print()
 
-        # On effectue une recherche tabou locale à partir de ce sommet
-        cycle = recherche_tabou_cycle(matrix, start, firstNeighbor, iter_max)
+        # Si c'est le meilleur, on sauvegarde les cycles
+        if total < tempsMeilleurCycle:
+            tempsMeilleurCycle = total
+            goodI = i
 
-        # On affiche le résultat intermédiaire
-        print(f"Lancement {i+1}: départ={firstNeighbor}, longueur du cycle={len(cycle)}, temps du trajet={poidCycle(matrix, cycle)}")
+            # On stocke le meilleur cycle
+            bestTime = [
+                truckCycles[0].copy(),                    # copie des temps des camions
+                [cycle.copy() for cycle in truckCycles[1]]  # copie profonde des cycles
+            ]
 
-        
-        if tempsMeilleurCycle == 0:
-            tempsMeilleurCycle = poidCycle(matrix, cycle)
-            meilleur_cycle = cycle
-            goodI = i+1
-        elif poidCycle(matrix, cycle) < tempsMeilleurCycle:
-            meilleur_cycle = cycle
-            tempsMeilleurCycle = poidCycle(matrix, cycle)
-            goodI = i+1
+            print(f"→ Nouveau meilleur cycle sauvegardé ! Lancement {i+1}.\n")
 
-    # Après tous les lancements, on renvoie le meilleur
-    return meilleur_cycle, tempsMeilleurCycle, goodI
+    return tempsMeilleurCycle, goodI, bestTime
 
 
-# Mesure du temps d’exécution
 start_time = time.time()
+tempsMeilleurCycle, goodI, bestTime = tabou_multi_start(matrix)
+execution_time_ms = (time.time() - start_time) * 1000
 
-print("### Recherche tabou multi-start sur la Zone A ###\n")
-print("Nombre de clients :", len(matrix))
-
-# Lancement du multi-start (10 essais, taille tabou = 5, 100 itérations max)
-meilleur_cycle, tempsMeilleurCycle, goodI = tabou_multi_start(matrix, 20, 100)
-
-# Fin du chrono
-end_time = time.time()
-execution_time_ms = (end_time - start_time) * 1000
-
-# Affichage du meilleur résultat trouvé
 print("\n=== Meilleur cycle trouvé ===")
-print("Lancement n°", goodI, "Longueur du cycle :", len(meilleur_cycle)+ 1, "  Temps du cycle :", tempsMeilleurCycle)
-for s in meilleur_cycle:
-    print(s + 1, "-> ", end='')
-print(meilleur_cycle[0]+1)  # on revient au départ pour fermer le cycle
+print("Lancement n°", goodI+1, "  Temps du cycle :", tempsMeilleurCycle)
+
+for i in range(nbTrucks):
+    print(f"Cycle du camion {i+1} : ", " -> ".join(str(x+1) for x in bestTime[1][i]))
+    print(f"Temps total du camion {i+1} : {bestTime[0][i]}\n")
+
+print("Temps d'exécution :", round(execution_time_ms, 2), "ms")
+
 
 print("\nTemps d'exécution :", round(execution_time_ms, 2), "ms")

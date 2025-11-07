@@ -9,7 +9,7 @@ import time
 NbClients = 5
 clientLocs = []
 
-while len(clientLocs) < NbClients:
+while len(clientLocs) < NbClients + 1:
     x = random.randint(0, NbClients*10)
     y = random.randint(0, NbClients*10)
     
@@ -35,5 +35,5 @@ def distance_matrix(locs):
 matrix = distance_matrix(clientLocs)
 print("Distance Matrix:\n", distance_matrix(clientLocs))
 
-filename = f"instance/matrix_distances_{NbClients+1}x{NbClients+1}.csv"  
+filename = f"instance/{NbClients+1}x{NbClients+1}.csv"  
 np.savetxt(filename, matrix, delimiter=",", fmt='%d')
