@@ -161,7 +161,7 @@ def lire_matrice_csv(filename):
             lecteur = csv.reader(f)
             for ligne in lecteur:
                 # on ignore les champs vides
-                valeurs = [float(x) for x in ligne if x.strip() != ""]
+                valeurs = [int(float(x)) for x in ligne if x.strip() != ""]
                 if valeurs:  # si la ligne n’est pas vide
                     matrice.append(valeurs)
     return matrice
@@ -187,39 +187,22 @@ def generer_facteur_bouchon(heure):
 
 def facteurs_variation(matrice, pourcentage):
     """
-    Ajoute des valeurs aléatoire à un pourcentage de routes dans la matrice
-    SANS DOUBLONS
+    Applique des variations aléatoires (positives ou négatives)
+    sur un certain pourcentage de routes, sans doublons.
+    Retourne la liste des routes modifiées.
     """
     n = len(matrice)
-    
-    # 1. Lister TOUTES les routes possibles
-    toutes_les_routes = []
-    for i in range(n):
-        for j in range(i + 1, n):  # i < j pour éviter les doublons
-            if matrice[i][j] != 0:
-                toutes_les_routes.append((i, j))
-    
-    total_routes = len(toutes_les_routes)
-    nb_a_modifier = int(total_routes * pourcentage)
-    
-    print(f"🎯 Modification de {nb_a_modifier} routes uniques sur {total_routes} totales")
-    
-    # 2. Sélectionner UNIQUEMENT des routes différentes
+    toutes_les_routes = [(i, j) for i in range(n) for j in range(i + 1, n) if matrice[i][j] != 0]
+    nb_a_modifier = int(len(toutes_les_routes) * pourcentage)
     routes_selectionnees = random.sample(toutes_les_routes, nb_a_modifier)
     
-    modifications = []
     for i, j in routes_selectionnees:
-        p = random.uniform(-0.5, 0.5)
-        ancienne_valeur = matrice[i][j]
-        nouvelle_valeur = ancienne_valeur * (1 + p)
-        matrice[i][j] = max(1, int(round(nouvelle_valeur, 0)))
-        matrice[j][i] = max(1, int(round(nouvelle_valeur, 0)))
-        modifications.append((i, j, p))
+        p = random.uniform(-0.3, 0.3)  # ±30% de variation locale
+        nouvelle_valeur = matrice[i][j] * (1 + p)
+        matrice[i][j] = matrice[j][i] = max(1, int(round(nouvelle_valeur)))
     
-    # Afficher le compte exact
-    print(f"   Exactement {len(modifications)} routes modifiées (sans doublons)")
-    
-    return modifications
+    return routes_selectionnees
+
 
 def cout_effectif(matrice, i, j, heure):
     """
@@ -248,60 +231,61 @@ def simulation_journee(matrice, nom_fichier):
         facteur = generer_facteur_bouchon(h)
         cout_05 = cout_effectif(matrice, 0, 5, h)
         print(f"Heure {h:2d}h | Facteur bouchon: {facteur:.2f} | Coût 0->5: {cout_05}")
-
+import random
 
 def creer_fichiers_avec_bouchons():
-    """
-    Crée 3 fichiers CSV avec bouchons appliqués pour différentes heures
-    """
     matrix_instances = ['11x11.csv']
     heures = [8, 12, 20]
-    
-    for instance in matrix_instances:  
+
+    for instance in matrix_instances:
         print(f"\n{'='*50}")
         print(f"Traitement de {instance}")
         print(f"{'='*50}")
-        
-        # Lire la matrice originale
-        chemin_original = f"instance/{instance}" 
+
+        chemin_original = f"instance/{instance}"
         try:
             matrice_base = lire_matrice_csv(chemin_original)
             n = len(matrice_base)
-            print(f"Matrice chargée : {n}x{n}")
-            
         except FileNotFoundError:
             print(f"Fichier {chemin_original} non trouvé")
             continue
-        
-        # Créer un fichier pour chaque heure
+
         for heure in heures:
             nom_sortie = f"matrice/{instance.replace('.csv', '')}_{heure}h.csv"
-            print(f"Création de {nom_sortie}...")
-            
+            print(f"\nCréation de {nom_sortie}...")
 
             matrice_copie = copy.deepcopy(matrice_base)
-            
 
-            print("   Application des variations aléatoires...")
-            facteurs_variation(matrice_copie, 0.2)
-            
-            nouvelle_matrice = [[0] * n for _ in range(n)]
-            
+
+            facteur_global = generer_facteur_bouchon(heure)
+
+            proportion_routes_affectees = 0.3  # 30 % des routes changent
+            routes_affectees = set()
+
             for i in range(n):
-                for j in range(i, n):
-                    if i == j:
-                        nouvelle_matrice[i][j] = 0
+                for j in range(i + 1, n):
+                    if random.random() < proportion_routes_affectees:
+                        routes_affectees.add((i, j))
+
+            # --- Application des changements ---
+            for i in range(n):
+                for j in range(i + 1, n):
+                    if (i, j) in routes_affectees:
+                        # route touchée → facteur global + variation locale
+                        variation_locale = random.uniform(0.8, 1.4)
+                        facteur_total = facteur_global * variation_locale
+                        nouvelle_valeur = int(round(matrice_base[i][j] * facteur_total))
+                    
+                        matrice_copie[i][j] = matrice_copie[j][i] = nouvelle_valeur
                     else:
-                        cout = cout_effectif(matrice_copie, i, j, heure)
-                        nouvelle_matrice[i][j] = cout
-                        nouvelle_matrice[j][i] = cout
-            
-            # Écrire le fichier
+                        # route non touchée → inchangée
+                        matrice_copie[i][j] = matrice_copie[j][i] = int(matrice_base[i][j])
+
+            # --- Sauvegarde ---
             with open(nom_sortie, 'w', newline='') as f:
                 writer = csv.writer(f)
-                for ligne in nouvelle_matrice:
-                    writer.writerow(ligne)
-            
+                writer.writerows(matrice_copie)
+
             print(f"✓ Fichier créé : {nom_sortie}")
 
 # c pour tester que tout fonctionne correctement avec la matrice 11x11
