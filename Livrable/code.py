@@ -6,11 +6,49 @@ import random
 import time
 import math
 
-# Lecture de la matrice
-matrix = np.loadtxt("instance/2001x2001.csv", delimiter=",", dtype=int)
+# === SWITCH POUR CHOISIR LE FICHIER CSV ===
+print("=== Sélection de l'instance ===")
+print("1 - 6X6.csv")
+print("2 - 11X11.csv")
+print("3 - 51X51.csv")
+print("4 - 101X101.csv")
+print("5 - 201X201.csv")
+print("6 - 501X501.csv")
+print("7 - 1001X1001.csv")
+print("8 - 1501X1501.csv")
+print("9 - 2001X2001.csv")
+choix = input("Choisissez la matrice à utiliser (1-9) : ")
 
+if choix == "1":
+    csv_path = "instance/6X6.csv"
+elif choix == "2":
+    csv_path = "instance/11X11.csv"
+elif choix == "3":
+    csv_path = "instance/51X51.csv"
+elif choix == "4":
+    csv_path = "instance/101X101.csv"
+elif choix == "5":
+    csv_path = "instance/201X201.csv"
+elif choix == "6":
+    csv_path = "instance/501X501.csv"
+elif choix == "7":
+    csv_path = "instance/1001X1001.csv"
+elif choix == "8":
+    csv_path = "instance/1501X1501.csv"
+elif choix == "9":
+    csv_path = "instance/2001X2001.csv"
+else:
+    csv_path = "instance/6X6.csv"
+
+# === CHOIX DU NOMBRE DE CAMIONS ===
+try:
+    nbTrucks = int(input("Nombre de camions à utiliser : "))
+except:
+    nbTrucks = 10  # valeur par défaut
+
+# === Chargement de la matrice choisie ===
+matrix = np.loadtxt(csv_path, delimiter=",", dtype=int)
 depot = 0
-nbTrucks = 50
 
 def voisinMinPoid(matrix, listeClient, cur):
     poidMinTrajet = 0
@@ -28,17 +66,14 @@ def poidCycle():
     return sum(truckCycles[0])
 
 def recherche_tabou_cycle(matrix, start):
-    # On copie la matrice pour ne pas modifier l'originale
     matrix_copy = copy.deepcopy(matrix)
     tabou = deque(maxlen=len(matrix))
     tabou.append(start)
     
-    # Initialiser les cycles des camions
     for i in range(nbTrucks):
         tabou.append(truckCycles[1][i][-1])
 
     while len(tabou) < len(matrix):
-        # Choisir le camion avec le temps minimal
         truckAtMove = truckCycles[0].index(min(truckCycles[0]))
         cur = truckCycles[1][truckAtMove][-1]
 
@@ -50,28 +85,23 @@ def recherche_tabou_cycle(matrix, start):
 
         voisin, temps = voisinMinPoid(matrix_copy, candidats, cur)
 
-        # Retirer l'arête entre cur et voisin
         matrix_copy[cur][voisin] = 0
         matrix_copy[voisin][cur] = 0
 
-        # Mettre à jour le cycle et le temps
         truckCycles[1][truckAtMove].append(voisin)
         truckCycles[0][truckAtMove] += temps
         tabou.append(voisin)
 
-    # Ajouter le retour au dépôt
+    # Retour au dépôt
     for i in range(nbTrucks):
-        # Retourner au dépôt
         last_visited = truckCycles[1][i][-1]
         truckCycles[1][i].append(depot)
-        truckCycles[0][i] += matrix[last_visited][depot]  # ajouter le coût du retour au dépôt
-
-
+        truckCycles[0][i] += matrix[last_visited][depot]
 
 def tabou_multi_start(matrix, nb_lancements=20):
     tempsMeilleurCycle = float('inf')
     goodI = -1
-    bestTime = None  # ici on stockera seulement le meilleur
+    bestTime = None
 
     for i in range(nb_lancements):
         global truckCycles
@@ -80,7 +110,6 @@ def tabou_multi_start(matrix, nb_lancements=20):
             [[] for _ in range(nbTrucks)]
         ]
 
-        # Choix aléatoire du premier client pour chaque camion
         for j in range(nbTrucks):
             truckCycles[1][j] = [depot]
             while True:
@@ -91,38 +120,34 @@ def tabou_multi_start(matrix, nb_lancements=20):
                     break
 
         recherche_tabou_cycle(matrix, depot)
-
         total = poidCycle()
         print(f"Lancement {i+1} terminé : Temps du cycle = {total}")
+
         for k in range(nbTrucks):
             print(f"Premier client du camion {k+1} : {truckCycles[1][k][0]+1}")
             print(f"Cycle du camion {k+1} : ", " -> ".join(str(x+1) for x in truckCycles[1][k]))
             print(f"Temps total du camion {k+1} : {truckCycles[0][k]}")
             print()
 
-        # Si c'est le meilleur, on sauvegarde les cycles
         if total < tempsMeilleurCycle:
             tempsMeilleurCycle = total
             goodI = i
-
-            # On stocke le meilleur cycle
             bestTime = [
-                truckCycles[0].copy(),                    # copie des temps des camions
-                [cycle.copy() for cycle in truckCycles[1]]  # copie profonde des cycles
+                truckCycles[0].copy(),
+                [cycle.copy() for cycle in truckCycles[1]]
             ]
-
             print(f"→ Nouveau meilleur cycle sauvegardé ! Lancement {i+1}.\n")
 
     return tempsMeilleurCycle, goodI, bestTime
 
 
+# === Lancement principal ===
 start_time = time.time()
 tempsMeilleurCycle, goodI, bestTime = tabou_multi_start(matrix)
 execution_time_ms = (time.time() - start_time) * 1000
 
 print("\n=== Meilleur cycle trouvé ===")
 print("Lancement n°", goodI+1, "  Temps du cycle :", tempsMeilleurCycle)
-
 for i in range(nbTrucks):
     print(f"Cycle du camion {i+1} : ", " -> ".join(str(x+1) for x in bestTime[1][i]))
     print(f"Temps total du camion {i+1} : {bestTime[0][i]}\n")
@@ -130,94 +155,60 @@ for i in range(nbTrucks):
 print("Temps d'exécution :", round(execution_time_ms, 2), "ms")
 
 
-print("\nTemps d'exécution :", round(execution_time_ms, 2), "ms")
+# === Fonctions de lecture et simulation (inchangées) ===
 
-
-#bon 
 def lire_matrice_csv(filename):
-    """
-    Lit une matrice complète depuis un fichier CSV.
-    Retourne une liste de listes (matrice).
-    """
     matrice = []
     with open(filename, newline='') as f:
-            lecteur = csv.reader(f)
-            for ligne in lecteur:
-                # on ignore les champs vides
-                valeurs = [int(float(x)) for x in ligne if x.strip() != ""]
-                if valeurs:  # si la ligne n’est pas vide
-                    matrice.append(valeurs)
+        lecteur = csv.reader(f)
+        for ligne in lecteur:
+            valeurs = [int(float(x)) for x in ligne if x.strip() != ""]
+            if valeurs:
+                matrice.append(valeurs)
     return matrice
 
-
-#bon 
 def generer_facteur_bouchon(heure):
-    """
-    Génère un facteur global de bouchon selon l'heure de la journée.
-    - Peu de bouchons la nuit
-    - Maximal vers 8h et 17h
-    """
-
     seed_value = hash(f"bouchon_{heure}") % (2**32)
     random.seed(seed_value)
-    # Heure normalisée sur 24h → sinus pour faire un cycle
     intensite = 0.5 + 0.5 * math.sin((heure - 8) / 24 * 2 * math.pi)
-    # Variation entre 1.0 et 3.0 environ
-    facteur =  2.0 * intensite  
+    facteur = 2.0 * intensite  
     if facteur <= 0:
         facteur = 1
     return facteur
 
 def facteurs_variation(matrice, pourcentage):
-    """
-    Applique des variations aléatoires (positives ou négatives)
-    sur un certain pourcentage de routes, sans doublons.
-    Retourne la liste des routes modifiées.
-    """
     n = len(matrice)
     toutes_les_routes = [(i, j) for i in range(n) for j in range(i + 1, n) if matrice[i][j] != 0]
     nb_a_modifier = int(len(toutes_les_routes) * pourcentage)
     routes_selectionnees = random.sample(toutes_les_routes, nb_a_modifier)
     
     for i, j in routes_selectionnees:
-        p = random.uniform(-0.3, 0.3)  # ±30% de variation locale
+        p = random.uniform(-0.3, 0.3)
         nouvelle_valeur = matrice[i][j] * (1 + p)
         matrice[i][j] = matrice[j][i] = max(1, int(round(nouvelle_valeur)))
     
     return routes_selectionnees
 
-
 def cout_effectif(matrice, i, j, heure):
-    """
-    Retourne le coût dynamique entre 2 villes à une heure donnée.
-    Préserve la symétrie : cout(i,j) = cout(j,i)
-    """
     base = matrice[i][j]
     if base == 0:
         return 0
-    
-    # Facteur global du trafic (selon l'heure)
     facteur_bouchon = generer_facteur_bouchon(heure)
-
-    
     cout = base * facteur_bouchon 
-    return max(1, int(round(cout, 0)))  # ✅ Éviter les 0
-
+    return max(1, int(round(cout, 0)))
 
 def simulation_journee(matrice, nom_fichier):
-    """
-    Simule une journée complète de trafic sur une matrice donnée.
-    """
     print(f"\n=== Simulation sur {nom_fichier} ===")
-    heures = list(range(0, 25, 4))  # toutes les 4 heures
+    heures = list(range(0, 25, 4))
     for h in heures:
         facteur = generer_facteur_bouchon(h)
         cout_05 = cout_effectif(matrice, 0, 5, h)
         print(f"Heure {h:2d}h | Facteur bouchon: {facteur:.2f} | Coût 0->5: {cout_05}")
-import random
+
+# === Partie bouchons ===
 
 def creer_fichiers_avec_bouchons():
-    matrix_instances = ['2001x2001.csv']
+    matrix_instances = ['6X6.csv']
     heures = [8, 12, 20]
 
     for instance in matrix_instances:
@@ -238,11 +229,9 @@ def creer_fichiers_avec_bouchons():
             print(f"\nCréation de {nom_sortie}...")
 
             matrice_copie = copy.deepcopy(matrice_base)
-
-
             facteur_global = generer_facteur_bouchon(heure)
 
-            proportion_routes_affectees = 0.3  # 30 % des routes changent
+            proportion_routes_affectees = 0.3
             routes_affectees = set()
 
             for i in range(n):
@@ -250,47 +239,29 @@ def creer_fichiers_avec_bouchons():
                     if random.random() < proportion_routes_affectees:
                         routes_affectees.add((i, j))
 
-            # --- Application des changements ---
             for i in range(n):
                 for j in range(i + 1, n):
                     if (i, j) in routes_affectees:
-                        # route touchée → facteur global + variation locale
                         variation_locale = random.uniform(0.8, 1.4)
                         facteur_total = facteur_global * variation_locale
                         nouvelle_valeur = int(round(matrice_base[i][j] * facteur_total))
-                    
                         matrice_copie[i][j] = matrice_copie[j][i] = nouvelle_valeur
                     else:
-                        # route non touchée → inchangée
                         matrice_copie[i][j] = matrice_copie[j][i] = int(matrice_base[i][j])
 
-            # --- Sauvegarde ---
             with open(nom_sortie, 'w', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerows(matrice_copie)
 
             print(f"✓ Fichier créé : {nom_sortie}")
 
-# c pour tester que tout fonctionne correctement avec la matrice 2001x2001
-def test_bouchons():
-    """
-    Test uniquement le système de bouchons avec la matrice 2001x2001
-    """
 
-    # 1. Lire la matrice originale
-    #print("1. Lecture de la matrice 2001x2001...")
-    #print(lire_matrice_csv("instance/2001x2001.csv"))
-    matrice_originale = lire_matrice_csv("instance/2001x2001.csv")
-    # print(f"   ✅ Matrice originale : {len(matrice_originale)}x{len(matrice_originale)}")
-    
-    # 2. Tester la simulation sur 24h
+def test_bouchons():
+    matrice_originale = lire_matrice_csv("instance/6X6.csv")
     print("\n2. Simulation sur 24h...")
-    simulation_journee(matrice_originale, "2001x2001.csv")
-    
-    # 3. Créer les 3 fichiers avec bouchons (UNIQUEMENT CET APPEL)
+    simulation_journee(matrice_originale, "6X6.csv")
     print("\n3. Création des fichiers avec bouchons...")
-    creer_fichiers_avec_bouchons()  # ✅ Juste cet appel
-    
+    creer_fichiers_avec_bouchons()
     print("\n" + "=" * 50)
     print("🎉 TEST BOUCHONS TERMINÉ !")
     print("3 fichiers créés dans le dossier 'matrice/'")
@@ -298,42 +269,34 @@ def test_bouchons():
 
 
 def verifier_modifications():
-    """Vérifie que le nombre de modifications est cohérent"""
     print("🔍 VÉRIFICATION DES MODIFICATIONS")
     print("=" * 50)
     random.seed(42)
-    matrice_test = lire_matrice_csv("instance/2001x2001.csv")
+    matrice_test = lire_matrice_csv("instance/6X6.csv")
     n = len(matrice_test)
     
-    # Compter les routes non-nulles originales
     routes_non_nulles_original = 0
     for i in range(n):
         for j in range(i + 1, n):
             if matrice_test[i][j] != 0:
                 routes_non_nulles_original += 1
-    
     print(f"Routes non-nulles originales: {routes_non_nulles_original}")
     
     for heure in [8, 12, 20]:
         print(f"\n--- Heure {heure}h ---")
         matrice_copie = copy.deepcopy(matrice_test)
-        
-        # Appliquer variations
         random.seed(hash(f"test_{heure}") % (2**32))
         modifications = facteurs_variation(matrice_copie, 0.3)
-        
-        # Compter les routes modifiées
         routes_modifiees = 0
         for i in range(n):
             for j in range(i + 1, n):
                 if matrice_copie[i][j] != matrice_test[i][j]:
                     routes_modifiees += 1
-        
         print(f"Routes modifiées comptées: {routes_modifiees}")
         print(f"Modifications annoncées: {len(modifications)}")
         print(f"COHÉRENT: {routes_modifiees == len(modifications)}")
 
 
-# Ajoutez cet appel avant test_bouchons()
+# === Exécution finale ===
 verifier_modifications()
 test_bouchons()
