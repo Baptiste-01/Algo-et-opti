@@ -21,26 +21,36 @@ choix = input("Choisissez la matrice à utiliser (1-9) : ")
 
 if choix == "1":
     csv_path = "instance/6X6.csv"
+    nameFile = "6X6.csv"
 elif choix == "2":
     csv_path = "instance/11X11.csv"
+    nameFile = "11X11.csv"
 elif choix == "3":
     csv_path = "instance/51X51.csv"
+    nameFile = "51X51.csv"
 elif choix == "4":
     csv_path = "instance/101X101.csv"
+    nameFile = "101X101.csv"
 elif choix == "5":
     csv_path = "instance/201X201.csv"
+    nameFile = "201X201.csv"
 elif choix == "6":
     csv_path = "instance/501X501.csv"
+    nameFile = "501X501.csv"
 elif choix == "7":
     csv_path = "instance/1001X1001.csv"
+    nameFile = "1001X1001.csv"
 elif choix == "8":
     csv_path = "instance/1501X1501.csv"
+    nameFile = "1501X1501.csv"
 elif choix == "9":
     csv_path = "instance/2001X2001.csv"
+    nameFile = "2001X2001.csv"
 else:
     csv_path = "instance/6X6.csv"
+    nameFile = "6X6.csv"
 
-# === CHOIX DU NOMBRE DE CAMIONS ===
+
 try:
     nbTrucks = int(input("Nombre de camions à utiliser : "))
 except:
@@ -49,6 +59,9 @@ except:
 # === Chargement de la matrice choisie ===
 matrix = np.loadtxt(csv_path, delimiter=",", dtype=int)
 depot = 0
+
+hour = 8 * 3600 * 1000  # Heure de départ en millisecondes
+
 
 def voisinMinPoid(matrix, listeClient, cur):
     poidMinTrajet = 0
@@ -208,8 +221,8 @@ def simulation_journee(matrice, nom_fichier):
 # === Partie bouchons ===
 
 def creer_fichiers_avec_bouchons():
-    matrix_instances = ['6X6.csv']
-    heures = [8, 12, 20]
+    matrix_instances = [nameFile]
+    heures = [8, 12, 16]
 
     for instance in matrix_instances:
         print(f"\n{'='*50}")
@@ -257,9 +270,9 @@ def creer_fichiers_avec_bouchons():
 
 
 def test_bouchons():
-    matrice_originale = lire_matrice_csv("instance/6X6.csv")
+    matrice_originale = lire_matrice_csv(csv_path)
     print("\n2. Simulation sur 24h...")
-    simulation_journee(matrice_originale, "6X6.csv")
+    simulation_journee(matrice_originale, nameFile)
     print("\n3. Création des fichiers avec bouchons...")
     creer_fichiers_avec_bouchons()
     print("\n" + "=" * 50)
