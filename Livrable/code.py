@@ -5,6 +5,10 @@ import copy
 import random
 import time
 import math
+import pandas as pd
+import matplotlib.pyplot as plt
+# Lecture de la matrice
+matrix = np.loadtxt("instance/101x101.csv", delimiter=",", dtype=int)
 
 # === SWITCH POUR CHOISIR LE FICHIER CSV ===
 print("=== Sélection de l'instance ===")
@@ -59,6 +63,7 @@ except:
 # === Chargement de la matrice choisie ===
 matrix = np.loadtxt(csv_path, delimiter=",", dtype=int)
 depot = 0
+nbTrucks = 10
 
 hour = 8 * 3600 * 1000  # Heure de départ en millisecondes
 
@@ -221,7 +226,7 @@ def simulation_journee(matrice, nom_fichier):
 # === Partie bouchons ===
 
 def creer_fichiers_avec_bouchons():
-    matrix_instances = [nameFile]
+    matrix_instances = [csv_path]
     heures = [8, 12, 16]
 
     for instance in matrix_instances:
@@ -268,11 +273,11 @@ def creer_fichiers_avec_bouchons():
 
             print(f"✓ Fichier créé : {nom_sortie}")
 
-
+# c pour tester que tout fonctionne correctement avec la matrice 101x101
 def test_bouchons():
     matrice_originale = lire_matrice_csv(csv_path)
     print("\n2. Simulation sur 24h...")
-    simulation_journee(matrice_originale, nameFile)
+    simulation_journee(matrice_originale, csv_path)
     print("\n3. Création des fichiers avec bouchons...")
     creer_fichiers_avec_bouchons()
     print("\n" + "=" * 50)
@@ -285,7 +290,7 @@ def verifier_modifications():
     print("🔍 VÉRIFICATION DES MODIFICATIONS")
     print("=" * 50)
     random.seed(42)
-    matrice_test = lire_matrice_csv("instance/6X6.csv")
+    matrice_test = lire_matrice_csv("instance/101x101.csv")
     n = len(matrice_test)
     
     routes_non_nulles_original = 0
@@ -313,3 +318,88 @@ def verifier_modifications():
 # === Exécution finale ===
 verifier_modifications()
 test_bouchons()
+
+#test analyse statistiques
+def run_multiple_experiments(matrix, n_runs=20):
+    results = []
+    for i in range(n_runs):
+        start = time.time()
+        best_cost, best_iter, best_solution = tabou_multi_start(matrix, nb_lancements=1)
+        duration = time.time() - start
+        results.append({
+            "run": i + 1,
+            "cost": best_cost,
+            "iteration": best_iter,
+            "time_s": duration
+        })
+        print(f" Run {i+1}/{n_runs} terminé — Coût = {best_cost} | Temps = {duration:.2f}s")
+    return pd.DataFrame(results)
+
+
+# === test ===
+df_results = run_multiple_experiments(matrix, n_runs=20)
+df_results.to_csv("resultats_tabou.csv", index=False)
+df_results.plot(y='cost', kind='bar', title='Coût des cycles sur 20 runs')
+plt.xlabel('Run')
+
+plt.ylabel('Coût du cycle')
+plt.show()
+
+def analyse_resultats(df):
+    print("\n === Statistiques globales ===")
+    print(df.describe()[["cost", "time_s"]])
+
+    cout_moyen = df["cost"].mean()
+    ecart_type = df["cost"].std()
+    cout_min = df["cost"].min()
+    cout_max = df["cost"].max()
+
+    print(f"\nCoût moyen : {cout_moyen:.2f}")
+    print(f"Écart-type : {ecart_type:.2f}")
+    print(f"Meilleur coût : {cout_min:.2f}")
+    print(f"Pire coût : {cout_max:.2f}")
+
+analyse_resultats(df_results)
+
+plt.figure(figsize=(6, 5))
+plt.boxplot(df_results["cost"], showmeans=True)
+plt.title("Distribution des coûts (Tabu Search)")
+plt.ylabel("Coût total")
+plt.grid(alpha=0.3)
+plt.show()
+
+
+plt.figure(figsize=(6, 5))
+plt.hist(df_results["time_s"], bins=8, color="skyblue", edgecolor="black")
+plt.title("Distribution des temps d'exécution")
+plt.xlabel("Temps (s)")
+plt.ylabel("Fréquence")
+plt.grid(alpha=0.3)
+plt.show()
+
+
+iterations = np.arange(0, 50)
+costs_example = [5000 / (1 + 0.1*i) + np.random.normal(0, 50) for i in iterations]
+
+plt.figure(figsize=(7, 4))
+plt.plot(iterations, costs_example, marker='o')
+plt.title("Exemple de convergence du coût au fil des itérations")
+plt.xlabel("Itérations")
+plt.ylabel("Coût total")
+plt.grid(alpha=0.3)
+plt.show()
+
+opt_cost = 27591  # exemple : solution optimale X-n101-k25
+df_results["gap_%"] = 100 * (df_results["cost"] - opt_cost) / opt_cost
+
+print("\n=== GAP par rapport à la solution optimale ===")
+print(df_results[["run", "cost", "gap_%"]])
+
+print(f"\n Moyenne du gap : {df_results['gap_%'].mean():.2f}%")
+
+plt.figure(figsize=(6,5))
+plt.boxplot(df_results["gap_%"], showmeans=True)
+plt.title("Distribution du GAP (%) par rapport à l’optimum")
+plt.ylabel("GAP (%)")
+plt.grid(alpha=0.3)
+plt.show()
