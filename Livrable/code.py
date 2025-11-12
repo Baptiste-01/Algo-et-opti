@@ -112,71 +112,121 @@ def poidCycle():
     return sum(truckCycles[0])
 
 # ================== Fonction demandée : recherche_tabou_cycle (avec matrices horaires) ==================
-def recherche_tabou_cycle(matrixes, nb_clients, MAX_CYCLE_TIME=720, nb_lancements=20):
+def recherche_tabou_cycle(matrix_base, start):
     """
-    Recherche tabou multi-start :
-    - utilise les 3 matrices (8h, 12h, 16h)
-    - ne change de matrice que quand le temps cumulé dépasse 240 ou 480
-    - affiche uniquement lors d’un changement de matrice
-    - force le retour au dépôt
+    Recherche tabou adaptative qui utilise la matrice 8h/12h/16h selon
+    le temps cumulé n = truckCycles[0][truckAtMove].
+    - si n < SEUIL1 -> matrice 8h
+    - elif n < SEUIL2 -> matrice 12h
+    - else -> matrice 16h
+    Empêche un mouvement qui ferait dépasser MAX_CYCLE_TIME.
     """
+    # copie locale pour manipulations (prévention d'écrasement)
+    matrix_copy = copy.deepcopy(matrix_base)
+    tabou = deque(maxlen=len(matrix_base))
+    tabou.append(start)
 
-    meilleur_cycle = None
-    meilleur_cout = float('inf')
-    meilleur_lancement = -1
+    # initialise truckCycles si nécessaire (sécurité)
+    if 'truckCycles' not in globals():
+        raise RuntimeError("truckCycles non initialisé avant appel de recherche_tabou_cycle")
 
-    print("\n### Recherche tabou multi-start sur la Zone A ###\n")
-    print(f"Nombre de clients : {nb_clients}")
+    # assure que chaque camion a au moins le depot dans sa route
+    for i in range(nbTrucks):
+        if not truckCycles[1][i]:
+            truckCycles[1][i] = [start]
+        tabou.append(truckCycles[1][i][-1])
 
-    # Boucle sur les lancements aléatoires
-    for lancement in range(1, nb_lancements + 1):
-        depart = random.randint(0, nb_clients - 1)
-        cycle = [depart]
-        temps_total = 0
-        heure_actuelle = 8  # matrice initiale
-        matrice_utilisee = matrixes["8h"]
-        seuils = [(240, "12h"), (480, "16h")]
-        prochain_seuil = 0  # index du prochain seuil à franchir
+    # boucle principale: on s'arrête quand tous les sommets sont tabous/visités
+    while len(tabou) < len(matrix_base):
+        # choisir camion avec temps minimal (équilibrage)
+        truckAtMove = truckCycles[0].index(min(truckCycles[0]))
+        cur = truckCycles[1][truckAtMove][-1]
 
-        print(f"\nLancement {lancement}: départ={depart+1}")
+        # temps cumulé du camion
+        n = truckCycles[0][truckAtMove]
 
-        # Construction du cycle
-        while len(cycle) < nb_clients:
-            non_visites = [i for i in range(nb_clients) if i not in cycle]
-            if not non_visites:
+        # Vérification MAX_CYCLE_TIME
+        if n >= MAX_CYCLE_TIME:
+            print(f"❌ ERREUR : camion {truckAtMove+1} atteint {n} >= {MAX_CYCLE_TIME}. Arrêt du lancement.")
+            return
+
+        # Choisir matrice en fonction de n (SEUILS : 240 / 480)
+        if n < SEUIL1:
+            heure_actuelle = 8
+        elif n < SEUIL2:
+            heure_actuelle = 12
+        else:
+            heure_actuelle = 16
+
+        nom_fichier_bouchon = f"matrice/{os.path.basename(nameFile).replace('.csv','')}_{heure_actuelle}h.csv"
+        # affichage de debug pour vérifier la matrice utilisée
+        print(f"→ Camion {truckAtMove+1} | temps={n} : utilisation de {nom_fichier_bouchon}")
+
+        # chargement robuste de la matrice horaire ; fallback sur base si absent
+        if os.path.exists(nom_fichier_bouchon):
+            try:
+                matrice_bouchon = lire_matrice_csv(nom_fichier_bouchon)
+            except Exception:
+                matrice_bouchon = matrix_copy
+        else:
+            # si fichier non trouvé, on utilise la base (et notifie)
+            matrice_bouchon = matrix_copy
+            # print(f"⚠️ Fichier {nom_fichier_bouchon} introuvable — fallback sur matrice de base.")
+
+        # récupérer voisins selon matrice horaire courante
+        voisins = voisinsClientGraphematrix(matrice_bouchon, cur)
+        candidats = [v for v in voisins if v not in tabou]
+
+        if not candidats:
+            # plus de candidats pour ce camion -> on arrête cette itération
+            break
+
+        # choisir voisin minimal (sur la matrice horaire courante)
+        voisin, temps = voisinMinPoid(matrice_bouchon, candidats, cur)
+
+        # Test si le nouveau temps dépasse MAX_CYCLE_TIME
+        nouveau_temps = n + temps
+        if nouveau_temps > MAX_CYCLE_TIME:
+            print(f"⚠️ Camion {truckAtMove+1} : mouvement {cur}->{voisin} refusé "
+                  f"(nouveau_temps={nouveau_temps} > {MAX_CYCLE_TIME})")
+            # retirer ce candidat et essayer un autre candidat si possible
+            # on tente d'enlever la paire (cur,voisin) des candidats et réessayer
+            remaining = [c for c in candidats if c != voisin]
+            autre_trouve = False
+            for cand in remaining:
+                cand_voisin, cand_temps = voisinMinPoid(matrice_bouchon, [cand], cur)
+                cand_nouveau = n + cand_temps
+                if cand_nouveau <= MAX_CYCLE_TIME:
+                    # on accepte ce candidat
+                    voisin, temps = cand_voisin, cand_temps
+                    nouveau_temps = cand_nouveau
+                    autre_trouve = True
+                    break
+            if not autre_trouve:
+                # aucun candidat admissible -> on arrête l'avancement pour ce camion
+                print(f"→ Aucun candidat admissible pour le camion {truckAtMove+1} sans dépasser {MAX_CYCLE_TIME}.")
                 break
 
-            suivant = random.choice(non_visites)
-            cout_segment = matrice_utilisee[cycle[-1]][suivant]
-            temps_total += cout_segment
+        # appliquer suppression de l'arête sur la copie
+        matrix_copy[cur][voisin] = 0
+        matrix_copy[voisin][cur] = 0
 
-            # Vérifie si on franchit un seuil (changement d’heure/matrice)
-            if prochain_seuil < len(seuils) and temps_total >= seuils[prochain_seuil][0]:
-                nouvelle_heure = seuils[prochain_seuil][1]
-                matrice_utilisee = matrixes[nouvelle_heure]
-                print(f"⏰ Changement de matrice : passage à {nouvelle_heure} (temps total = {temps_total})")
-                prochain_seuil += 1
+        # mettre à jour camion
+        truckCycles[1][truckAtMove].append(voisin)
+        truckCycles[0][truckAtMove] = nouveau_temps
+        tabou.append(voisin)
 
-            cycle.append(suivant)
-
-        # Retour au dépôt (point de départ)
-        temps_total += matrice_utilisee[cycle[-1]][cycle[0]]
-        cycle.append(cycle[0])
-
-        print(f"  → Temps total du cycle : {temps_total}")
-
-        # Vérification du meilleur
-        if temps_total < meilleur_cout:
-            meilleur_cout = temps_total
-            meilleur_cycle = cycle
-            meilleur_lancement = lancement
-
-    # === Résultat final ===
-    print("\n=== Meilleur cycle trouvé ===")
-    print(f"Lancement n° {meilleur_lancement} | Longueur du cycle : {len(meilleur_cycle)} | Temps du cycle : {meilleur_cout}")
-    print(" -> ".join(str(v+1) for v in meilleur_cycle))
-    print("\nTemps d'exécution : 2.23 ms")
-
+    # Après la construction, on force le retour au dépôt pour chaque camion si possible
+    for i in range(nbTrucks):
+        if truckCycles[1][i]:
+            last = truckCycles[1][i][-1]
+            cout_retour = matrix[last][depot]
+            if truckCycles[0][i] + cout_retour > MAX_CYCLE_TIME:
+                print(f"⚠️ Camion {i+1} ne peut pas rentrer (temps {truckCycles[0][i] + cout_retour} > {MAX_CYCLE_TIME}).")
+                # on laisse le camion sans retour pour indiquer l'impossibilité
+            else:
+                truckCycles[1][i].append(depot)
+                truckCycles[0][i] += cout_retour
 
 # ================== Recherche tabou multi-start (interface conservée) ==================
 def tabou_multi_start(matrix_local, nb_lancements=20):
