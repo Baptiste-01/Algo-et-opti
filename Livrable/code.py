@@ -56,18 +56,16 @@ else:
 try:
     nbTrucks = int(input("Nombre de camions à utiliser : "))
 except:
-    nbTrucks = 10  # valeur par défaut
+    nbTrucks = 10
 
-# Parameters
+
 depot = 0
-MAX_CYCLE_TIME = 720  # durée maximale d’un cycle de camion (unité cohérente avec tes matrices)
-# seuils fixes demandés
+MAX_CYCLE_TIME = 720  
 SEUIL1 = 240
 SEUIL2 = 480
 
 # === Utilitaires de lecture (définit avant usage) ===
 def lire_matrice_csv(filename):
-    """Lit une matrice CSV et renvoie une liste de listes (int)."""
     matrice = []
     with open(filename, newline='') as f:
         lecteur = csv.reader(f)
@@ -78,13 +76,13 @@ def lire_matrice_csv(filename):
                 matrice.append(valeurs)
     return matrice
 
-# Ensure 'matrice' output folder exists
+
 if not os.path.exists("matrice"):
     os.makedirs("matrice")
 
 # === Chargement de la matrice de base (celle choisie) ===
 try:
-    # np.loadtxt -> fallback to lire_matrice_csv if fails
+
     try:
         base_matrix = np.loadtxt(csv_path, delimiter=",", dtype=int).tolist()
     except Exception:
@@ -92,7 +90,6 @@ try:
 except FileNotFoundError:
     raise FileNotFoundError(f"Fichier introuvable : {csv_path}")
 
-# pour compatibilité, matrix variable (utilisée ailleurs)
 matrix = base_matrix
 
 # ================== Fonctions algorithme (inchangées en interface) ==================
@@ -112,70 +109,59 @@ def poidCycle():
     return sum(truckCycles[0])
 
 # ================== Fonction demandée : recherche_tabou_cycle (avec matrices horaires) ==================
-def recherche_tabou_cycle(matrixes, nb_clients, MAX_CYCLE_TIME=720, nb_lancements=20):
-    """
-    Recherche tabou multi-start :
-    - utilise les 3 matrices (8h, 12h, 16h)
-    - ne change de matrice que quand le temps cumulé dépasse 240 ou 480
-    - affiche uniquement lors d’un changement de matrice
-    - force le retour au dépôt
-    """
+# On copie la matrix pour ne pas modifier l’originale
+def recherche_tabou_cycle(matrix, start):
+    matrix_copy = copy.deepcopy(matrix)
+    tabou = deque(maxlen=len(matrix))
+    tabou.append(start)
 
-    meilleur_cycle = None
-    meilleur_cout = float('inf')
-    meilleur_lancement = -1
+    matrix8h_copy = copy.deepcopy(matrix8h)
+    matrix12h_copy = copy.deepcopy(matrix12h)
+    matrix16h_copy = copy.deepcopy(matrix16h)
+    
+    for i in range(nbTrucks):
+        tabou.append(truckCycles[1][i][-1])
 
-    print("\n### Recherche tabou multi-start sur la Zone A ###\n")
-    print(f"Nombre de clients : {nb_clients}")
+    while len(tabou) < len(matrix):
 
-    # Boucle sur les lancements aléatoires
-    for lancement in range(1, nb_lancements + 1):
-        depart = random.randint(0, nb_clients - 1)
-        cycle = [depart]
-        temps_total = 0
-        heure_actuelle = 8  # matrice initiale
-        matrice_utilisee = matrixes["8h"]
-        seuils = [(240, "12h"), (480, "16h")]
-        prochain_seuil = 0  # index du prochain seuil à franchir
+        truckAtMove = truckCycles[0].index(min(truckCycles[0]))
+        cur = truckCycles[1][truckAtMove][-1]
 
-        print(f"\nLancement {lancement}: départ={depart+1}")
+        if  truckCycles[0][truckAtMove] < SEUIL1:
+            matrixAtUse = matrix8h_copy
+        elif truckCycles[0][truckAtMove] < SEUIL2:
+            matrixAtUse = matrix12h_copy
+        elif truckCycles[0][truckAtMove] >= MAX_CYCLE_TIME:
+            print(f"Camion {truckAtMove} n'a plus de temps pour terminer sa tourné. Essayez avec plus de camions.")
+            break
+        else:
+            matrixAtUse = matrix16h_copy
+        
 
-        # Construction du cycle
-        while len(cycle) < nb_clients:
-            non_visites = [i for i in range(nb_clients) if i not in cycle]
-            if not non_visites:
-                break
+        voisins = voisinsClientGraphematrix(matrixAtUse, cur)
+        candidats = [v for v in voisins if v not in tabou]
 
-            suivant = random.choice(non_visites)
-            cout_segment = matrice_utilisee[cycle[-1]][suivant]
-            temps_total += cout_segment
+        if not candidats:
+            break
 
-            # Vérifie si on franchit un seuil (changement d’heure/matrice)
-            if prochain_seuil < len(seuils) and temps_total >= seuils[prochain_seuil][0]:
-                nouvelle_heure = seuils[prochain_seuil][1]
-                matrice_utilisee = matrixes[nouvelle_heure]
-                print(f"⏰ Changement de matrice : passage à {nouvelle_heure} (temps total = {temps_total})")
-                prochain_seuil += 1
+        voisin, temps = voisinMinPoid(matrix_copy, candidats, cur)
 
-            cycle.append(suivant)
+        matrix8h_copy[cur][voisin] = 0
+        matrix8h_copy[voisin][cur] = 0
+        matrix12h_copy[cur][voisin] = 0
+        matrix12h_copy[voisin][cur] = 0
+        matrix16h_copy[cur][voisin] = 0
+        matrix16h_copy[voisin][cur] = 0
 
-        # Retour au dépôt (point de départ)
-        temps_total += matrice_utilisee[cycle[-1]][cycle[0]]
-        cycle.append(cycle[0])
+        truckCycles[1][truckAtMove].append(voisin)
+        truckCycles[0][truckAtMove] += temps
+        tabou.append(voisin)
 
-        print(f"  → Temps total du cycle : {temps_total}")
-
-        # Vérification du meilleur
-        if temps_total < meilleur_cout:
-            meilleur_cout = temps_total
-            meilleur_cycle = cycle
-            meilleur_lancement = lancement
-
-    # === Résultat final ===
-    print("\n=== Meilleur cycle trouvé ===")
-    print(f"Lancement n° {meilleur_lancement} | Longueur du cycle : {len(meilleur_cycle)} | Temps du cycle : {meilleur_cout}")
-    print(" -> ".join(str(v+1) for v in meilleur_cycle))
-    print("\nTemps d'exécution : 2.23 ms")
+    # Retour au dépôt
+    for i in range(nbTrucks):
+        last_visited = truckCycles[1][i][-1]
+        truckCycles[1][i].append(depot)
+        truckCycles[0][i] += matrix[last_visited][depot]
 
 
 # ================== Recherche tabou multi-start (interface conservée) ==================
@@ -184,13 +170,10 @@ def tabou_multi_start(matrix_local, nb_lancements=20):
     goodI = -1
     bestTime = None
 
-    # make sure bouchon matrices exist (create them if missing)
-    # this will create matrice/<basename>_8h.csv etc.
     try:
         creer_fichiers_avec_bouchons()
     except Exception as e:
-        # if creation fails, we continue: recherche_tabou_cycle fera fallback sur matrix_base
-        print(f"⚠️ Création fichiers bouchons échouée ou déjà faite : {e}")
+        print(f"Création fichiers bouchons échouée ou déjà faite : {e}")
 
     for i in range(nb_lancements):
         global truckCycles
@@ -199,7 +182,6 @@ def tabou_multi_start(matrix_local, nb_lancements=20):
             [[] for _ in range(nbTrucks)]
         ]
 
-        # initialisation : choisir un premier voisin différent pour chaque camion
         for j in range(nbTrucks):
             truckCycles[1][j] = [depot]
             attempts = 0
@@ -213,7 +195,6 @@ def tabou_multi_start(matrix_local, nb_lancements=20):
                     truckCycles[0][j] = matrix_local[depot][firstNeighbor]
                     break
 
-        # lancer la recherche tabou qui gère les matrices horaires
         recherche_tabou_cycle(matrix_local, depot)
 
         total = poidCycle()
@@ -260,16 +241,13 @@ def facteurs_variation(matrice, pourcentage):
     return routes_selectionnees
 
 def creer_fichiers_avec_bouchons():
-    """
-    Crée 3 fichiers matrice/<basename>_8h.csv, _12h.csv, _16h.csv
-    en partant de csv_path (qui est 'instance/xxx.csv').
-    Si les fichiers existent déjà, on les écrase pour garantir consistance.
-    """
+
     instances = [csv_path]
     heures = [8, 12, 16]
+    matrixCreated = []
 
     for instance in instances:
-        chemin_original = instance  # instance contient déjà le chemin correct
+        chemin_original = instance  
         try:
             matrice_base = lire_matrice_csv(chemin_original)
         except FileNotFoundError:
@@ -307,7 +285,14 @@ def creer_fichiers_avec_bouchons():
                 writer.writerows(matrice_copie)
 
             print(f"✓ Fichier créé : {nom_sortie}")
+            matrixCreated.append((nom_sortie))
+    
+    matrix8h = lire_matrice_csv(matrixCreated[0])
+    matrix12h = lire_matrice_csv(matrixCreated[1])
+    matrix16h = lire_matrice_csv(matrixCreated[2])
 
+    return matrix8h, matrix12h, matrix16h
+  
 # ================== Fonctions de simulation / affichage (inchangées) ==================
 def cout_effectif(matrice_local, i, j, heure):
     base = matrice_local[i][j]
@@ -331,7 +316,6 @@ def verifier_modifications():
     print("=" * 50)
     random.seed(42)
 
-    # lire la matrice source
     try:
         matrice_test = lire_matrice_csv(csv_path)
     except FileNotFoundError:
@@ -354,13 +338,10 @@ def verifier_modifications():
 
 # ================== MAIN : exécution ==================
 if __name__ == "__main__":
-    # crée/écrase les matrices horaires
-    creer_fichiers_avec_bouchons()
+    matrix8h, matrix12h, matrix16h = creer_fichiers_avec_bouchons()
 
-    # vérification rapide
     verifier_modifications()
 
-    # lancement tabou
     start_time = time.time()
     tempsMeilleurCycle, goodI, bestTime = tabou_multi_start(matrix)
     execution_time_ms = (time.time() - start_time) * 1000
