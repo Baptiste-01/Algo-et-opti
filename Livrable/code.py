@@ -106,11 +106,12 @@ def poidCycle():
     return sum(truckCycles[0])
 
 # ================== Fonction demandée : recherche_tabou_cycle (avec matrices horaires) ==================
-# On copie la matrix pour ne pas modifier l’originale
+
 def recherche_tabou_cycle(matrix, start):
     tabou = deque(maxlen=len(matrix))
     tabou.append(start)
     ancientCandidats = list(range(len(matrix)))
+    stop = False
     
     for i in range(nbTrucks):
         tabou.append(truckCycles[1][i][-1])
@@ -126,6 +127,7 @@ def recherche_tabou_cycle(matrix, start):
             matrixAtUse = matrix12h
         elif truckCycles[0][truckAtMove] >= MAX_CYCLE_TIME:
             print(f"Camion {truckAtMove} n'a plus de temps pour terminer sa tourné. Essayez avec plus de camions.")
+            stop = True
             break
         else:
             matrixAtUse = matrix16h
@@ -143,12 +145,19 @@ def recherche_tabou_cycle(matrix, start):
         truckCycles[1][truckAtMove].append(voisin)
         truckCycles[0][truckAtMove] += temps
         tabou.append(voisin)
+        #print(f"Camion {truckAtMove+1} a utilisé la matrice {matrixAtUse} (temps ajouté : {temps}, temps total : {truckCycles[0][truckAtMove]})")
 
     # Retour au dépôt
-    for i in range(nbTrucks):
-        last_visited = truckCycles[1][i][-1]
-        truckCycles[1][i].append(depot)
-        truckCycles[0][i] += matrix[last_visited][depot]
+    if stop == False:
+        for i in range(nbTrucks):
+            last_visited = truckCycles[1][i][-1]
+            if truckCycles[0][i] + matrix[last_visited][depot] > MAX_CYCLE_TIME:
+                print(f"Camion {i} ne peut pas retourner au dépôt sans dépasser le temps maximum.")
+                stop = True
+                break
+            truckCycles[1][i].append(depot)
+            truckCycles[0][i] += matrix[last_visited][depot]
+    return stop
 
 
 # ================== Recherche tabou multi-start (interface conservée) ==================
@@ -156,11 +165,6 @@ def tabou_multi_start(matrix_local, nb_lancements=20):
     tempsMeilleurCycle = float('inf')
     goodI = -1
     bestTime = None
-
-    try:
-        creer_fichiers_avec_bouchons()
-    except Exception as e:
-        print(f"Création fichiers bouchons échouée ou déjà faite : {e}")
 
     for i in range(nb_lancements):
         global truckCycles
@@ -182,25 +186,27 @@ def tabou_multi_start(matrix_local, nb_lancements=20):
                     truckCycles[0][j] = matrix_local[depot][firstNeighbor]
                     break
 
-        recherche_tabou_cycle(matrix_local, depot)
+        stop = recherche_tabou_cycle(matrix_local, depot)
 
-        total = poidCycle()
-        print(f"Lancement {i+1} terminé : Temps du cycle = {total}")
+        if not stop:
+            total = poidCycle()
+            print(f"Lancement {i+1} terminé : Temps du cycle = {total}")
 
-        for k in range(nbTrucks):
-            print(f"Premier client du camion {k+1} : {truckCycles[1][k][0]+1}")
-            print(f"Cycle du camion {k+1} : ", " -> ".join(str(x+1) for x in truckCycles[1][k]))
-            print(f"Temps total du camion {k+1} : {truckCycles[0][k]}")
             print()
-
-        if total < tempsMeilleurCycle:
-            tempsMeilleurCycle = total
-            goodI = i
-            bestTime = [
-                truckCycles[0].copy(),
-                [cycle.copy() for cycle in truckCycles[1]]
-            ]
-            print(f"→ Nouveau meilleur cycle sauvegardé ! Lancement {i+1}.\n")
+            for k in range(nbTrucks):
+                print(f"Temps total du camion {k+1} : {truckCycles[0][k]}")
+                
+            print()
+            if total < tempsMeilleurCycle:
+                tempsMeilleurCycle = total
+                goodI = i
+                bestTime = [
+                    truckCycles[0].copy(),
+                    [cycle.copy() for cycle in truckCycles[1]]
+                ]
+                print(f"→ Nouveau meilleur cycle sauvegardé ! Lancement {i+1}.\n")       
+        else:
+            print(f"Lancement {i+1} interrompu prématurément en raison d'une contrainte de temps.\n")
 
     return tempsMeilleurCycle, goodI, bestTime
 
@@ -277,6 +283,7 @@ def creer_fichiers_avec_bouchons():
     matrix12h = lire_matrice_csv(matrixCreated[1])
     matrix16h = lire_matrice_csv(matrixCreated[2])
 
+
     return matrix8h, matrix12h, matrix16h
   
 # ================== Fonctions de simulation / affichage (inchangées) ==================
@@ -289,16 +296,16 @@ def cout_effectif(matrice_local, i, j, heure):
     return max(1, int(round(cout, 0)))
 
 def simulation_journee(matrice_local, nom_fichier):
-    print(f"\n=== Simulation sur {nom_fichier} ===")
     heures = list(range(0, 25, 4))
     for h in heures:
         facteur = generer_facteur_bouchon(h)
         cout_05 = cout_effectif(matrice_local, 0, 5, h)
-        print(f"Heure {h:2d}h | Facteur bouchon: {facteur:.2f} | Coût 0->5: {cout_05}")
+
 
 # ================== Vérifications et tests ==================
+'''
 def verifier_modifications():
-    print("🔍 VÉRIFICATION DES MODIFICATIONS")
+    print("VÉRIFICATION DES MODIFICATIONS")
     print("=" * 50)
     random.seed(42)
 
@@ -321,24 +328,33 @@ def verifier_modifications():
         print(f"Routes modifiées comptées: {routes_modifiees}")
         print(f"Modifications annoncées: {len(modifications)}")
         print(f"COHÉRENT: {routes_modifiees == len(modifications)}")
-
+'''
 # ================== MAIN : exécution ==================
 if __name__ == "__main__":
     matrix8h, matrix12h, matrix16h = creer_fichiers_avec_bouchons()
 
-    verifier_modifications()
+    #verifier_modifications()
 
     start_time = time.time()
+    print("\n=== Démarrage de la recherche tabou multi-start ===")
+    print()
     tempsMeilleurCycle, goodI, bestTime = tabou_multi_start(matrix)
-    execution_time_ms = (time.time() - start_time) * 1000
+    execution_time = (time.time() - start_time) * 1000
 
     print("\n=== Meilleur cycle trouvé ===")
-    print("Lancement n°", goodI+1, "  Temps du cycle :", tempsMeilleurCycle)
-    if bestTime:
+    if goodI != -1:
+        print("Lancement n°", goodI+1, "  Temps du cycle :", tempsMeilleurCycle)
         for i in range(nbTrucks):
             print(f"Cycle du camion {i+1} : ", " -> ".join(str(x+1) for x in bestTime[1][i]))
             print(f"Temps total du camion {i+1} : {bestTime[0][i]}\n")
     else:
-        print("Aucun meilleur cycle sauvegardé.")
+        print("Aucun cycle valide n'a été trouvé avec les contraintes données.")
+        
 
-    print("Temps d'exécution :", round(execution_time_ms, 2), "ms")
+    
+    if execution_time < 1000:
+        print("Temps d'exécution :", round(execution_time, 2), "ms")
+    elif execution_time < 60000:
+        print("Temps d'exécution :", round(execution_time / 1000, 2), "s")
+    else:
+        print("Temps d'exécution :", round(execution_time / 60000, 2), "min")
