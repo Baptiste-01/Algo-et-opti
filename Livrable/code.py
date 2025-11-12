@@ -102,22 +102,15 @@ def voisinMinPoid(matrix_local, listeClient, cur):
             poidMinTrajet = matrix_local[cur][i]
     return nextVoisin, poidMinTrajet
 
-def voisinsClientGraphematrix(matrix_local, sommet):
-    return [i for i in range(len(matrix_local)) if matrix_local[sommet][i] > 0]
-
 def poidCycle():
     return sum(truckCycles[0])
 
 # ================== Fonction demandée : recherche_tabou_cycle (avec matrices horaires) ==================
 # On copie la matrix pour ne pas modifier l’originale
 def recherche_tabou_cycle(matrix, start):
-    matrix_copy = copy.deepcopy(matrix)
     tabou = deque(maxlen=len(matrix))
     tabou.append(start)
-
-    matrix8h_copy = copy.deepcopy(matrix8h)
-    matrix12h_copy = copy.deepcopy(matrix12h)
-    matrix16h_copy = copy.deepcopy(matrix16h)
+    ancientCandidats = list(range(len(matrix)))
     
     for i in range(nbTrucks):
         tabou.append(truckCycles[1][i][-1])
@@ -128,30 +121,24 @@ def recherche_tabou_cycle(matrix, start):
         cur = truckCycles[1][truckAtMove][-1]
 
         if  truckCycles[0][truckAtMove] < SEUIL1:
-            matrixAtUse = matrix8h_copy
+            matrixAtUse = matrix8h
         elif truckCycles[0][truckAtMove] < SEUIL2:
-            matrixAtUse = matrix12h_copy
+            matrixAtUse = matrix12h
         elif truckCycles[0][truckAtMove] >= MAX_CYCLE_TIME:
             print(f"Camion {truckAtMove} n'a plus de temps pour terminer sa tourné. Essayez avec plus de camions.")
             break
         else:
-            matrixAtUse = matrix16h_copy
+            matrixAtUse = matrix16h
         
+        
+        candidats = [i for i in ancientCandidats if i not in tabou]
+        ancientCandidats = candidats
 
-        voisins = voisinsClientGraphematrix(matrixAtUse, cur)
-        candidats = [v for v in voisins if v not in tabou]
 
         if not candidats:
             break
 
-        voisin, temps = voisinMinPoid(matrix_copy, candidats, cur)
-
-        matrix8h_copy[cur][voisin] = 0
-        matrix8h_copy[voisin][cur] = 0
-        matrix12h_copy[cur][voisin] = 0
-        matrix12h_copy[voisin][cur] = 0
-        matrix16h_copy[cur][voisin] = 0
-        matrix16h_copy[voisin][cur] = 0
+        voisin, temps = voisinMinPoid(matrixAtUse, candidats, cur)
 
         truckCycles[1][truckAtMove].append(voisin)
         truckCycles[0][truckAtMove] += temps
@@ -242,50 +229,49 @@ def facteurs_variation(matrice, pourcentage):
 
 def creer_fichiers_avec_bouchons():
 
-    instances = [csv_path]
     heures = [8, 12, 16]
     matrixCreated = []
+    matrice_copie = copy.deepcopy(matrix)
 
-    for instance in instances:
-        chemin_original = instance  
-        try:
-            matrice_base = lire_matrice_csv(chemin_original)
-        except FileNotFoundError:
-            print(f"Fichier source introuvable : {chemin_original}")
-            continue
+ 
+    chemin_original = csv_path  
+    try:
+        matrice_base = lire_matrice_csv(chemin_original)
+    except FileNotFoundError:
+        print(f"Fichier source introuvable : {chemin_original}")
+    
 
-        n = len(matrice_base)
-        base_name = os.path.basename(instance).replace('.csv','')
+    n = len(matrice_base)
+    base_name = os.path.basename(csv_path).replace('.csv','')
 
-        for heure in heures:
-            nom_sortie = f"matrice/{base_name}_{heure}h.csv"
-            matrice_copie = copy.deepcopy(matrice_base)
-            facteur_global = generer_facteur_bouchon(heure)
+    for heure in heures:
+        nom_sortie = f"matrice/{base_name}_{heure}h.csv"
+        facteur_global = generer_facteur_bouchon(heure)
 
-            proportion_routes_affectees = 0.3
-            routes_affectees = set()
-            for i in range(n):
-                for j in range(i + 1, n):
-                    if random.random() < proportion_routes_affectees:
-                        routes_affectees.add((i, j))
+        proportion_routes_affectees = 0.3
+        routes_affectees = set()
+        for i in range(n):
+            for j in range(i + 1, n):
+                if random.random() < proportion_routes_affectees:
+                    routes_affectees.add((i, j))
 
-            for i in range(n):
-                for j in range(i + 1, n):
-                    if (i, j) in routes_affectees:
-                        variation_locale = random.uniform(0.8, 1.4)
-                        facteur_total = facteur_global * variation_locale
-                        nouvelle_valeur = int(round(matrice_base[i][j] * facteur_total))
-                        matrice_copie[i][j] = matrice_copie[j][i] = nouvelle_valeur
-                    else:
-                        matrice_copie[i][j] = matrice_copie[j][i] = int(matrice_base[i][j])
+        for i in range(n):
+            for j in range(i + 1, n):
+                if (i, j) in routes_affectees:
+                    variation_locale = random.uniform(0.8, 1.4)
+                    facteur_total = facteur_global * variation_locale
+                    nouvelle_valeur = int(round(matrice_base[i][j] * facteur_total))
+                    matrice_copie[i][j] = matrice_copie[j][i] = nouvelle_valeur
+                else:
+                    matrice_copie[i][j] = matrice_copie[j][i] = int(matrice_base[i][j])
 
-            # sauvegarde (écrase si existant)
-            with open(nom_sortie, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerows(matrice_copie)
+        # sauvegarde (écrase si existant)
+        with open(nom_sortie, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(matrice_copie)
 
-            print(f"✓ Fichier créé : {nom_sortie}")
-            matrixCreated.append((nom_sortie))
+        print(f"✓ Fichier créé : {nom_sortie}")
+        matrixCreated.append((nom_sortie))
     
     matrix8h = lire_matrice_csv(matrixCreated[0])
     matrix12h = lire_matrice_csv(matrixCreated[1])
