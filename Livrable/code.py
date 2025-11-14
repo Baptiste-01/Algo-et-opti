@@ -165,6 +165,7 @@ def tabou_multi_start(matrix_local, nb_lancements=20):
     tempsMeilleurCycle = float('inf')
     goodI = -1
     bestTime = None
+    results = []
 
     for i in range(nb_lancements):
         global truckCycles
@@ -187,7 +188,7 @@ def tabou_multi_start(matrix_local, nb_lancements=20):
                     break
 
         stop = recherche_tabou_cycle(matrix_local, depot)
-
+        
         if not stop:
             total = poidCycle()
             print(f"Lancement {i+1} terminé : Temps du cycle = {total}")
@@ -208,7 +209,11 @@ def tabou_multi_start(matrix_local, nb_lancements=20):
         else:
             print(f"Lancement {i+1} interrompu prématurément en raison d'une contrainte de temps.\n")
 
-    return tempsMeilleurCycle, goodI, bestTime
+        results.append({
+            "run": i + 1,
+            "total_time": total
+        })
+    return tempsMeilleurCycle, goodI, bestTime, results
 
 # ================== Partie bouchons (création des 3 matrices horaires) ==================
 def generer_facteur_bouchon(heure):
@@ -338,7 +343,7 @@ if __name__ == "__main__":
     start_time = time.time()
     print("\n=== Démarrage de la recherche tabou multi-start ===")
     print()
-    tempsMeilleurCycle, goodI, bestTime = tabou_multi_start(matrix)
+    tempsMeilleurCycle, goodI, bestTime, df_runs = tabou_multi_start(matrix)
     execution_time = (time.time() - start_time) * 1000
 
     print("\n=== Meilleur cycle trouvé ===")
@@ -358,3 +363,134 @@ if __name__ == "__main__":
         print("Temps d'exécution :", round(execution_time / 1000, 2), "s")
     else:
         print("Temps d'exécution :", round(execution_time / 60000, 2), "min")
+        
+        
+        
+import numpy as np
+import time
+
+# === Fonction pour lancer plusieurs expériences ===
+def run_multiple_experiments(matrix, n_runs=20):
+    results = []
+    for i in range(n_runs):
+        print(f"\n=== Lancement {i+1}/{n_runs} ===")
+        start = time.time()
+        
+        result = tabou_multi_start(matrix, nb_lancements=1)
+        
+        if isinstance(result, tuple):
+            best_total_time = result[0]
+        else:
+            best_total_time = result
+        
+        duration = time.time() - start
+
+        results.append({
+            "run": i + 1,
+            "total_time": float(best_total_time),
+            "duration": duration
+        })
+
+        print(f"✅ Run {i+1}/{n_runs} terminé — Coût total = {best_total_time}")
+
+    return pd.DataFrame(results)
+
+
+
+# === Exécution des 20 expériences ===
+print("\n=== Lancement de 20 expériences pour la matrice sélectionnée ===")
+
+# === Sauvegarde CSV ===
+df_runs = run_multiple_experiments(matrix, n_runs=20)
+df_runs.to_csv("resultats_tabou_20runs.csv", index=False)
+print("\nRésultats sauvegardés dans 'resultats_tabou_20runs.csv'")
+
+# === Statistiques globales ===
+print("\n=== Statistiques globales ===")
+
+mean_time = df_runs["total_time"].mean()
+std_time = df_runs["total_time"].std()
+min_time = df_runs["total_time"].min()
+max_time = df_runs["total_time"].max()
+median_time = df_runs["total_time"].median()
+n = len(df_runs)
+z = (df_runs["total_time"] - mean_time)/std_time
+gap = 100 * ((mean_time - min_time) / min_time)
+
+# Intervalle de confiance à 95 %
+ic95_low = mean_time - 1.96 * std_time / np.sqrt(n)
+ic95_high = mean_time + 1.96 * std_time / np.sqrt(n)
+
+print(f"Moyenne : {mean_time:.2f}")
+print(f"Médiane : {median_time:.2f}")
+print(f"Écart-type : {std_time:.2f}")
+print(f"Minimum : {min_time:.2f}")
+print(f"Maximum : {max_time:.2f}")
+print(f"Gap moyen : {gap:.2f}%")
+print(f"IC95% : [{ic95_low:.2f}, {ic95_high:.2f}]")
+
+df_runs["gap"] = 100 * (df_runs["total_time"] - min_time) / min_time
+
+
+# =====================================================
+# === 2. Boxplot enrichi ==============================
+# =====================================================
+plt.figure(figsize=(6,5))
+plt.boxplot(df_runs["total_time"], vert=True, patch_artist=True,
+            boxprops=dict(facecolor="lightgray", color="black"),
+            medianprops=dict(color="blue", linewidth=2),
+            meanprops=dict(marker="o", markerfacecolor="white", markeredgecolor="black"),
+            showmeans=True)
+
+plt.title("Distribution des coûts totaux sur 20 lancements")
+plt.ylabel("Coût total")
+plt.grid(alpha=0.3)
+
+# annotations de valeurs clés
+plt.text(1.1, mean_time, f"Moyenne : {mean_time:.2f}", color="red")
+plt.text(1.1, median_time, f"Médiane : {median_time:.2f}", color="blue")
+plt.text(1.1, min_time, f"Min : {min_time:.2f}", color="green")
+plt.text(1.1, max_time, f"Max : {max_time:.2f}", color="orange")
+plt.text(1.1, ic95_high, f"IC95% : [{ic95_low:.2f}, {ic95_high:.2f}]", color="purple", fontsize=8)
+plt.show()
+
+# =====================================================
+# === 3. Courbe du coût total par run ================
+# =====================================================
+plt.figure(figsize=(8,5))
+plt.plot(df_runs["run"], df_runs["total_time"], marker='o', linestyle='-', color='royalblue')
+plt.axhline(y=mean_time, color='red', linestyle='--', label=f"Moyenne ({mean_time:.2f})")
+plt.fill_between(df_runs["run"], ic95_low, ic95_high, color='gray', alpha=0.2, label="IC95%")
+plt.title("Évolution du coût total par run")
+plt.xlabel("Numéro du run")
+plt.ylabel("Coût total")
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+# =====================================================
+# === 4. Barres du gap (%) ============================
+# =====================================================
+plt.figure(figsize=(8,5))
+plt.bar(df_runs["run"], df_runs["gap"], color="lightcoral", edgecolor="black")
+plt.axhline(y=7, color='red', linestyle='--', label="Seuil 7%")
+plt.title("Gap (%) par rapport au meilleur run")
+plt.xlabel("Numéro du run")
+plt.ylabel("Gap (%)")
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+# =====================================================
+# === 5. Z-score plot (détection d'outliers) ==========
+# =====================================================
+plt.figure(figsize=(8,5))
+plt.bar(df_runs["run"], z, color="lightblue", edgecolor="black")
+plt.axhline(y=2, color='red', linestyle='--', label="Z = +2 (outlier potentiel)")
+plt.axhline(y=-2, color='red', linestyle='--', label="Z = -2 (outlier potentiel)")
+plt.title("Z-scores des runs (analyse d'anomalies)")
+plt.xlabel("Numéro du run")
+plt.ylabel("Z-score")
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
